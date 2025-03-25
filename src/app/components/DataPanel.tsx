@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Graph } from '../page';
 import { ParsedData } from '../utils/csvParser';
 
@@ -12,205 +12,269 @@ export default function DataPanel({ graph, onDataUpdate, onClose }: DataPanelPro
   const [editingData, setEditingData] = useState<ParsedData[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 15;
-
+  const [itemsPerPage, setItemsPerPage] = useState(15);
+  const [maxPages, setMaxPages] = useState(1);
+  
+  // Add virtualization state
+  const [visibleRange, setVisibleRange] = useState({ start: 0, end: 0 });
+  
+  // Initialize editing data when graph changes
   useEffect(() => {
-    if (graph) {
-      setEditingData(JSON.parse(JSON.stringify(graph.data)));
-      setCurrentPage(1);
-      setSearchTerm('');
+    if (graph && graph.data) {
+      setEditingData([...graph.data]);
+      setCurrentPage(1); // Reset to first page when graph changes
     }
   }, [graph]);
-
+  
+  // Handle point change
+  const handlePointChange = (index: number, field: 'x' | 'y', value: string) => {
+    const newValue = parseFloat(value);
+    if (isNaN(newValue)) return;
+    
+    const newData = [...editingData];
+    newData[index] = { ...newData[index], [field]: newValue };
+    setEditingData(newData);
+  };
+  
+  // Add a new point
+  const handleAddPoint = () => {
+    // Add a new point with default values or average values from existing data
+    let newX = 0;
+    let newY = 0;
+    
+    if (editingData.length > 0) {
+      // Use average of existing points 
+      const sumX = editingData.reduce((acc, point) => acc + point.x, 0);
+      const sumY = editingData.reduce((acc, point) => acc + point.y, 0);
+      newX = Math.round((sumX / editingData.length) * 100) / 100;
+      newY = Math.round((sumY / editingData.length) * 100) / 100;
+    }
+    
+    const newData = [...editingData, { x: newX, y: newY }];
+    setEditingData(newData);
+    // Go to last page to show the new point
+    setCurrentPage(Math.ceil(newData.length / itemsPerPage));
+  };
+  
+  // Delete point
+  const handleDeletePoint = (index: number) => {
+    const newData = editingData.filter((_, i) => i !== index);
+    setEditingData(newData);
+    
+    // Adjust current page if necessary
+    const newMaxPage = Math.max(1, Math.ceil(newData.length / itemsPerPage));
+    if (currentPage > newMaxPage) {
+      setCurrentPage(newMaxPage);
+    }
+  };
+  
+  // Save changes
+  const handleSaveChanges = () => {
+    if (!graph) return;
+    onDataUpdate(graph.id, editingData);
+    onClose();
+  };
+  
+  // Filter data by search term and apply pagination
+  const filteredAndPaginatedData = useMemo(() => {
+    let filtered = editingData;
+    
+    // Apply search filter if there's a search term
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      filtered = editingData.filter(point => 
+        point.x.toString().includes(term) || 
+        point.y.toString().includes(term)
+      );
+    }
+    
+    // Calculate max pages
+    const newMaxPages = Math.max(1, Math.ceil(filtered.length / itemsPerPage));
+    setMaxPages(newMaxPages);
+    
+    // Adjust current page if out of bounds
+    if (currentPage > newMaxPages) {
+      setCurrentPage(newMaxPages);
+    }
+    
+    // Calculate indexes for current page
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = Math.min(startIndex + itemsPerPage, filtered.length);
+    
+    // Set the visible range for virtualization
+    setVisibleRange({ start: startIndex, end: endIndex });
+    
+    return {
+      allFiltered: filtered,
+      visibleData: filtered.slice(startIndex, endIndex),
+      totalCount: filtered.length
+    };
+  }, [editingData, searchTerm, currentPage, itemsPerPage]);
+  
+  // Calculate virtualized table height
+  const getTableContainerHeight = useMemo(() => {
+    // Calculate based on data size to ensure scrollbar appears
+    const rowHeight = 40; // approximate height of each row
+    return Math.min(
+      // Display at most 10 rows at a time for performance
+      Math.min(10, filteredAndPaginatedData.visibleData.length) * rowHeight,
+      // Ensure table isn't too small
+      Math.max(200, Math.min(400, window.innerHeight - 250))
+    );
+  }, [filteredAndPaginatedData.visibleData.length]);
+  
   if (!graph) {
     return null;
   }
 
-  const handlePointChange = (index: number, key: 'x' | 'y', value: string) => {
-    const numValue = parseFloat(value);
-    if (!isNaN(numValue)) {
-      const newData = [...editingData];
-      newData[index] = { ...newData[index], [key]: numValue };
-      setEditingData(newData);
-    }
-  };
-
-  const handleAddPoint = () => {
-    const newData = [...editingData, { x: 0, y: 0 }];
-    setEditingData(newData);
-    // Move to the last page
-    setCurrentPage(Math.ceil(newData.length / itemsPerPage));
-  };
-
-  const handleDeletePoint = (index: number) => {
-    const newData = [...editingData];
-    newData.splice(index, 1);
-    setEditingData(newData);
-    
-    // If the current page is now empty, go to the previous page
-    const totalPages = Math.ceil(newData.length / itemsPerPage);
-    if (currentPage > totalPages && totalPages > 0) {
-      setCurrentPage(totalPages);
-    }
-  };
-
-  const handleSaveChanges = () => {
-    onDataUpdate(graph.id, editingData);
-  };
-
-  // Filter data by search term
-  const filteredData = searchTerm
-    ? editingData.filter(
-        point => 
-          point.x.toString().includes(searchTerm) || 
-          point.y.toString().includes(searchTerm)
-      )
-    : editingData;
-
-  // Calculate pagination
-  const totalPages = Math.ceil(filteredData.length / itemsPerPage);
-  const paginatedData = filteredData.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  );
-
   return (
-    <div className="h-full flex flex-col bg-white">
-      <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-gradient-to-r from-indigo-50 to-blue-50">
-        <h3 className="font-semibold text-gray-800">Edit Data</h3>
-        <button onClick={onClose} className="text-gray-500 hover:text-gray-700 p-1">
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+    <div className="h-full flex flex-col">
+      <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-gradient-to-r from-white to-indigo-100">
+        <h3 className="font-semibold text-indigo-900">{graph.title || 'Data Panel'}</h3>
+        <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
       </div>
       
-      <div className="p-4 border-b border-gray-200 bg-white">
-        <h4 className="font-medium text-sm mb-2">{graph.title || graph.filename || 'Graph Data'}</h4>
-        <div className="flex items-center">
+      <div className="p-4 space-y-4">
+        <div className="w-full">
           <input
             type="text"
             placeholder="Search points..."
+            className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-300 focus:border-indigo-500"
             value={searchTerm}
             onChange={(e) => {
               setSearchTerm(e.target.value);
-              setCurrentPage(1);
+              setCurrentPage(1); // Reset to first page when searching
             }}
-            className="flex-1 p-2 border border-gray-300 rounded-md text-sm mr-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300"
           />
-          <span className="text-sm text-gray-500 whitespace-nowrap">
-            {filteredData.length} points
-          </span>
         </div>
-      </div>
-      
-      <div className="flex-1 overflow-y-auto">
-        <table className="min-w-full border-collapse">
-          <thead className="sticky top-0 bg-gray-50">
-            <tr>
-              <th className="py-2 px-3 border-b border-gray-200 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">#</th>
-              <th className="py-2 px-3 border-b border-gray-200 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">X</th>
-              <th className="py-2 px-3 border-b border-gray-200 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Y</th>
-              <th className="py-2 px-3 border-b border-gray-200 text-right text-xs font-medium text-gray-700 uppercase tracking-wider">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {paginatedData.map((point, index) => {
-              const actualIndex = (currentPage - 1) * itemsPerPage + index;
-              return (
-                <tr key={actualIndex} className="hover:bg-indigo-50 transition-colors">
-                  <td className="py-2 px-3 border-b border-gray-200 text-sm text-gray-500">{actualIndex + 1}</td>
-                  <td className="py-2 px-3 border-b border-gray-200">
-                    <input
-                      type="number"
-                      value={point.x}
-                      onChange={(e) => handlePointChange(actualIndex, 'x', e.target.value)}
-                      className="w-full p-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300"
-                      step="0.01"
-                    />
-                  </td>
-                  <td className="py-2 px-3 border-b border-gray-200">
-                    <input
-                      type="number"
-                      value={point.y}
-                      onChange={(e) => handlePointChange(actualIndex, 'y', e.target.value)}
-                      className="w-full p-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300"
-                      step="0.01"
-                    />
-                  </td>
-                  <td className="py-2 px-3 border-b border-gray-200 text-right">
-                    <button
-                      onClick={() => handleDeletePoint(actualIndex)}
-                      className="text-red-500 hover:text-red-700 text-xs hover:underline"
-                    >
-                      Delete
-                    </button>
-                  </td>
+        
+        {/* Dynamic row count selector for large datasets */}
+        {editingData.length > 50 && (
+          <div className="flex justify-end text-sm text-gray-600">
+            <label htmlFor="itemsPerPage" className="mr-2 flex items-center">Rows per page:</label>
+            <select
+              id="itemsPerPage"
+              value={itemsPerPage}
+              onChange={(e) => {
+                const newValue = parseInt(e.target.value);
+                setItemsPerPage(newValue);
+                setCurrentPage(1); // Reset to first page when changing items per page
+              }}
+              className="p-1 border border-gray-300 rounded"
+            >
+              <option value="10">10</option>
+              <option value="15">15</option>
+              <option value="25">25</option>
+              <option value="50">50</option>
+            </select>
+          </div>
+        )}
+        
+        <div className="w-full overflow-x-auto">
+          <div style={{height: getTableContainerHeight}} className="overflow-y-auto">
+            <table className="min-w-full table-auto border-collapse">
+              <thead className="bg-gray-100 sticky top-0 z-10">
+                <tr>
+                  <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">#</th>
+                  <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">X</th>
+                  <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Y</th>
+                  <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Actions</th>
                 </tr>
-              );
-            })}
-            {paginatedData.length === 0 && (
-              <tr>
-                <td colSpan={4} className="py-4 text-center text-sm text-gray-500">
-                  {searchTerm ? "No matching points found" : "No data points available"}
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-      
-      {totalPages > 0 && (
-        <div className="p-3 border-t border-gray-200 flex justify-between items-center bg-gray-50">
-          <div className="flex space-x-1">
+              </thead>
+              <tbody>
+                {filteredAndPaginatedData.visibleData.length > 0 ? (
+                  filteredAndPaginatedData.visibleData.map((point, index) => {
+                    const actualIndex = visibleRange.start + index;
+                    return (
+                      <tr key={actualIndex} className="hover:bg-blue-50">
+                        <td className="border px-4 py-2 text-sm">{actualIndex + 1}</td>
+                        <td className="border px-4 py-2">
+                          <input
+                            type="number"
+                            value={point.x}
+                            onChange={(e) => handlePointChange(actualIndex, 'x', e.target.value)}
+                            className="w-full p-1 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-300 focus:border-indigo-500"
+                            step="0.01"
+                          />
+                        </td>
+                        <td className="border px-4 py-2">
+                          <input
+                            type="number"
+                            value={point.y}
+                            onChange={(e) => handlePointChange(actualIndex, 'y', e.target.value)}
+                            className="w-full p-1 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-300 focus:border-indigo-500"
+                            step="0.01"
+                          />
+                        </td>
+                        <td className="border px-4 py-2">
+                          <button
+                            onClick={() => handleDeletePoint(actualIndex)}
+                            className="text-red-500 hover:text-red-700 hover:underline"
+                          >
+                            Delete
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan={4} className="border px-4 py-8 text-center text-gray-500">
+                      {editingData.length === 0 
+                        ? "No data points available." 
+                        : "No matching data points found."}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        
+        {/* Pagination controls */}
+        <div className="flex justify-between items-center">
+          <div className="text-sm text-gray-600">
+            Showing {filteredAndPaginatedData.visibleData.length > 0 ? visibleRange.start + 1 : 0} to {visibleRange.end} of {filteredAndPaginatedData.totalCount} points
+          </div>
+          <div className="flex space-x-2">
             <button
-              onClick={() => setCurrentPage(1)}
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
               disabled={currentPage === 1}
-              className={`px-2 py-1 text-xs rounded ${currentPage === 1 ? 'text-gray-400' : 'text-blue-500 hover:bg-blue-50'}`}
+              className={`px-3 py-1 rounded ${currentPage === 1 ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-gray-200 hover:bg-gray-300 text-gray-700'}`}
             >
-              First
+              Prev
             </button>
+            <span className="px-3 py-1 bg-white border border-gray-300 rounded">
+              {currentPage} / {maxPages}
+            </span>
             <button
-              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-              disabled={currentPage === 1}
-              className={`px-2 py-1 text-xs rounded ${currentPage === 1 ? 'text-gray-400' : 'text-blue-500 hover:bg-blue-50'}`}
-            >
-              Previous
-            </button>
-            <div className="px-2 py-1 text-xs">
-              Page {currentPage} of {totalPages}
-            </div>
-            <button
-              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-              disabled={currentPage === totalPages}
-              className={`px-2 py-1 text-xs rounded ${currentPage === totalPages ? 'text-gray-400' : 'text-blue-500 hover:bg-blue-50'}`}
+              onClick={() => setCurrentPage(p => Math.min(maxPages, p + 1))}
+              disabled={currentPage >= maxPages}
+              className={`px-3 py-1 rounded ${currentPage >= maxPages ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-gray-200 hover:bg-gray-300 text-gray-700'}`}
             >
               Next
             </button>
-            <button
-              onClick={() => setCurrentPage(totalPages)}
-              disabled={currentPage === totalPages}
-              className={`px-2 py-1 text-xs rounded ${currentPage === totalPages ? 'text-gray-400' : 'text-blue-500 hover:bg-blue-50'}`}
-            >
-              Last
-            </button>
           </div>
+        </div>
+        
+        <div className="flex justify-between pt-4 border-t border-gray-200">
           <button
             onClick={handleAddPoint}
-            className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200 transition-colors"
+            className="px-4 py-2 bg-indigo-100 text-indigo-700 rounded hover:bg-indigo-200 transition-colors"
           >
             Add Point
           </button>
+          <button
+            onClick={handleSaveChanges}
+            className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors shadow-sm"
+          >
+            Apply Changes
+          </button>
         </div>
-      )}
-      
-      <div className="p-4 border-t border-gray-200 bg-gradient-to-r from-indigo-50 to-blue-50">
-        <button 
-          onClick={handleSaveChanges}
-          className="w-full bg-blue-500 text-white py-2 rounded hover:bg-blue-600 transition-colors shadow-sm"
-        >
-          Apply Changes
-        </button>
       </div>
     </div>
   );

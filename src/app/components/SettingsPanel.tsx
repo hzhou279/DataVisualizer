@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Graph } from '../page';
 
 interface SettingsPanelProps {
@@ -8,12 +8,52 @@ interface SettingsPanelProps {
 }
 
 export default function SettingsPanel({ graph, onClose, onSettingsUpdate }: SettingsPanelProps) {
-  // Calculate actual data ranges from graph data
-  const calculateDataRanges = () => {
-    if (graph.data.length === 0) return { xMin: 0, xMax: 0, yMin: 0, yMax: 0 };
+  // Calculate actual data ranges from graph data using memoization
+  const dataRanges = useMemo(() => {
+    if (!graph.data || graph.data.length === 0) return { xMin: 0, xMax: 0, yMin: 0, yMax: 0 };
     
-    const xValues = graph.data.map(point => point.x);
-    const yValues = graph.data.map(point => point.y);
+    // For very large datasets, sample the data for range calculation
+    let dataToProcess = graph.data;
+    if (graph.data.length > 500) {
+      // Sample approximately 500 points for range calculation
+      const samplingRate = Math.ceil(graph.data.length / 500);
+      dataToProcess = [];
+      for (let i = 0; i < graph.data.length; i += samplingRate) {
+        dataToProcess.push(graph.data[i]);
+      }
+      
+      // Ensure we include min/max points
+      let xMin = Infinity, xMax = -Infinity, yMin = Infinity, yMax = -Infinity;
+      let xMinPoint, xMaxPoint, yMinPoint, yMaxPoint;
+      
+      graph.data.forEach(point => {
+        if (point.x < xMin) {
+          xMin = point.x;
+          xMinPoint = point;
+        }
+        if (point.x > xMax) {
+          xMax = point.x;
+          xMaxPoint = point;
+        }
+        if (point.y < yMin) {
+          yMin = point.y;
+          yMinPoint = point;
+        }
+        if (point.y > yMax) {
+          yMax = point.y;
+          yMaxPoint = point;
+        }
+      });
+      
+      // Add extremes to the sampled data if not already included
+      if (xMinPoint && !dataToProcess.includes(xMinPoint)) dataToProcess.push(xMinPoint);
+      if (xMaxPoint && !dataToProcess.includes(xMaxPoint)) dataToProcess.push(xMaxPoint);
+      if (yMinPoint && !dataToProcess.includes(yMinPoint)) dataToProcess.push(yMinPoint);
+      if (yMaxPoint && !dataToProcess.includes(yMaxPoint)) dataToProcess.push(yMaxPoint);
+    }
+    
+    const xValues = dataToProcess.map(point => point.x);
+    const yValues = dataToProcess.map(point => point.y);
     
     return {
       xMin: Math.min(...xValues),
@@ -21,9 +61,7 @@ export default function SettingsPanel({ graph, onClose, onSettingsUpdate }: Sett
       yMin: Math.min(...yValues),
       yMax: Math.max(...yValues)
     };
-  };
-  
-  const dataRanges = calculateDataRanges();
+  }, [graph.data]);
   
   const [localState, setLocalState] = useState({
     width: graph.size.width,

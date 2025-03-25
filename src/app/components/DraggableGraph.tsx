@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import React from 'react';
 
@@ -79,43 +79,116 @@ export default function DraggableGraph({
   // Reference to the container element
   const containerRef = React.useRef<HTMLDivElement>(null);
 
-  // Effect to update scaled domains when size changes
-  useEffect(() => {
-    if (data && data.length > 0) {
-      // Calculate the data ranges
-      const xValues = data.map(point => point.x);
-      const yValues = data.map(point => point.y);
+  // Sample data for improved performance when dealing with large datasets
+  const processedData = useMemo(() => {
+    // If data is small enough, use all points
+    if (!data || data.length <= 100) return data;
+    
+    // For larger datasets, implement downsampling
+    // Strategy: Keep important points (min/max values) and sample the rest
+    if (data.length > 100) {
+      // First, identify min/max points for x and y
+      let xMin = Infinity, xMax = -Infinity, yMin = Infinity, yMax = -Infinity;
+      let xMinPoint, xMaxPoint, yMinPoint, yMaxPoint;
       
-      const dataMin = {
-        x: Math.min(...xValues),
-        y: Math.min(...yValues)
-      };
-      
-      const dataMax = {
-        x: Math.max(...xValues),
-        y: Math.max(...yValues)
-      };
-      
-      // Use provided domains or calculate from data
-      const domainValues = {
-        xMin: localDomains.xMin !== undefined ? localDomains.xMin : (quadrantMode === 'all' ? Math.min(dataMin.x, 0) : 0),
-        xMax: localDomains.xMax !== undefined ? localDomains.xMax : dataMax.x,
-        yMin: localDomains.yMin !== undefined ? localDomains.yMin : (quadrantMode === 'all' ? Math.min(dataMin.y, 0) : 0),
-        yMax: localDomains.yMax !== undefined ? localDomains.yMax : dataMax.y
-      };
-      
-      // Add small padding to ensure points don't sit on the edge
-      const xPadding = (domainValues.xMax - domainValues.xMin) * 0.05;
-      const yPadding = (domainValues.yMax - domainValues.yMin) * 0.05;
-      
-      setScaledDomains({
-        xMin: domainValues.xMin - xPadding,
-        xMax: domainValues.xMax + xPadding,
-        yMin: domainValues.yMin - yPadding,
-        yMax: domainValues.yMax + yPadding
+      data.forEach(point => {
+        if (point.x < xMin) {
+          xMin = point.x;
+          xMinPoint = point;
+        }
+        if (point.x > xMax) {
+          xMax = point.x;
+          xMaxPoint = point;
+        }
+        if (point.y < yMin) {
+          yMin = point.y;
+          yMinPoint = point;
+        }
+        if (point.y > yMax) {
+          yMax = point.y;
+          yMaxPoint = point;
+        }
       });
+      
+      // Determine how many points to sample
+      // We'll keep key points and sample the rest
+      const keyPoints = new Set();
+      if (xMinPoint) keyPoints.add(xMinPoint);
+      if (xMaxPoint) keyPoints.add(xMaxPoint);
+      if (yMinPoint) keyPoints.add(yMinPoint);
+      if (yMaxPoint) keyPoints.add(yMaxPoint);
+      
+      // Calculate the number of regular points to sample
+      // For larger datasets, use more aggressive sampling
+      let samplingRate;
+      if (data.length > 500) {
+        samplingRate = Math.ceil(data.length / 100); // Keep ~100 points
+      } else if (data.length > 200) {
+        samplingRate = Math.ceil(data.length / 150); // Keep ~150 points
+      } else {
+        samplingRate = Math.ceil(data.length / 200); // Keep ~200 points
+      }
+      
+      // Collect sampled points
+      const sampledPoints = [];
+      for (let i = 0; i < data.length; i += samplingRate) {
+        sampledPoints.push(data[i]);
+      }
+      
+      // Combine key points and sampled points
+      const result = [...Array.from(keyPoints), ...sampledPoints];
+      
+      // Remove duplicates
+      return Array.from(new Map(result.map(item => 
+        [JSON.stringify([item.x, item.y]), item]
+      )).values());
     }
-  }, [data, size, localDomains, quadrantMode]);
+    
+    return data;
+  }, [data]);
+
+  // Memoize domain calculations to avoid recalculating on every render
+  const calculatedDomains = useMemo(() => {
+    if (!data || data.length === 0) return scaledDomains;
+    
+    // Calculate the data ranges from the full dataset (not the sampled one)
+    const xValues = data.map(point => point.x);
+    const yValues = data.map(point => point.y);
+    
+    const dataMin = {
+      x: Math.min(...xValues),
+      y: Math.min(...yValues)
+    };
+    
+    const dataMax = {
+      x: Math.max(...xValues),
+      y: Math.max(...yValues)
+    };
+    
+    // Use provided domains or calculate from data
+    const domainValues = {
+      xMin: localDomains.xMin !== undefined ? localDomains.xMin : (quadrantMode === 'all' ? Math.min(dataMin.x, 0) : 0),
+      xMax: localDomains.xMax !== undefined ? localDomains.xMax : dataMax.x,
+      yMin: localDomains.yMin !== undefined ? localDomains.yMin : (quadrantMode === 'all' ? Math.min(dataMin.y, 0) : 0),
+      yMax: localDomains.yMax !== undefined ? localDomains.yMax : dataMax.y
+    };
+    
+    // Add small padding to ensure points don't sit on the edge
+    const xPadding = (domainValues.xMax - domainValues.xMin) * 0.05;
+    const yPadding = (domainValues.yMax - domainValues.yMin) * 0.05;
+    
+    return {
+      xMin: domainValues.xMin - xPadding,
+      xMax: domainValues.xMax + xPadding,
+      yMin: domainValues.yMin - yPadding,
+      yMax: domainValues.yMax + yPadding
+    };
+  }, [data, localDomains, quadrantMode]);
+
+  // Update scaled domains when domains are calculated
+  useEffect(() => {
+    setScaledDomains(calculatedDomains);
+  }, [calculatedDomains]);
 
   // Only set initial size once when component mounts, not on every data/domains change
   useEffect(() => {
@@ -296,6 +369,27 @@ export default function DraggableGraph({
     };
   }, [zIndex]);
 
+  // Memoize point rendering function to avoid recreating on every render
+  const renderPoint = useCallback((props: any) => {
+    const { cx, cy, fill } = props;
+    // For better performance with many points, simplify the point rendering
+    // Avoid adding filters and extra effects when we have many points
+    const pointSize = data?.length > 200 ? 4 : 6;
+    const useFilter = data?.length <= 200;
+    
+    return (
+      <circle
+        cx={cx}
+        cy={cy}
+        r={pointSize}
+        fill={fill}
+        strokeWidth={data?.length > 200 ? 1 : 2}
+        stroke="white"
+        filter={useFilter ? "url(#glow)" : undefined}
+      />
+    );
+  }, [data?.length]);
+
   return (
     <>
       <div 
@@ -440,65 +534,37 @@ export default function DraggableGraph({
                 <ScatterChart 
                   margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
                 >
-                  <CartesianGrid 
-                    stroke="rgba(150,150,150,0.15)" 
-                    horizontal={true}
-                    vertical={true}
-                    strokeDasharray="3 3"
-                    // Completely replace the coordinate generators with simplified versions
-                    horizontalCoordinatesGenerator={(props) => {
-                      const { yAxis } = props;
-                      if (!yAxis || !yAxis.scale || !yAxis.domain) return [];
-                      
-                      // Get tick values but exclude the min/max domain values
-                      const ticks = yAxis.scale.ticks();
-                      const [min, max] = yAxis.domain;
-                      
-                      // Filter out any ticks that are exactly at or very close to borders
-                      // Also filter out any ticks that appear to be duplicates (very close to each other)
-                      let filteredTicks: number[] = [];
-                      ticks.forEach((tick: number) => {
-                        // Skip ticks at or very close to domain boundaries
-                        if (Math.abs(tick - min) < 0.01 || Math.abs(tick - max) < 0.01) {
-                          return;
+                  {/* Conditionally render grid based on data size */}
+                  {(!data || data.length <= 300) ? (
+                    <CartesianGrid 
+                      stroke="rgba(150,150,150,0.15)" 
+                      horizontal={true}
+                      vertical={true}
+                      strokeDasharray="3 3"
+                    />
+                  ) : (
+                    <CartesianGrid 
+                      stroke="rgba(150,150,150,0.15)" 
+                      horizontal={true}
+                      vertical={true}
+                      strokeDasharray="3 3"
+                      // Reduce grid lines for better performance with large datasets
+                      horizontalPoints={[0.25, 0.5, 0.75].map(
+                        factor => {
+                          const yMin = scaledDomains.yMin ?? 0;
+                          const yMax = scaledDomains.yMax ?? 100;
+                          return yMin + (yMax - yMin) * factor;
                         }
-                        
-                        // Skip if very close to an already included tick
-                        const isDuplicate = filteredTicks.some(t => Math.abs(t - tick) < 0.01);
-                        if (!isDuplicate) {
-                          filteredTicks.push(tick);
+                      )}
+                      verticalPoints={[0.25, 0.5, 0.75].map(
+                        factor => {
+                          const xMin = scaledDomains.xMin ?? 0;
+                          const xMax = scaledDomains.xMax ?? 100;
+                          return xMin + (xMax - xMin) * factor;
                         }
-                      });
-                      
-                      return filteredTicks;
-                    }}
-                    verticalCoordinatesGenerator={(props) => {
-                      const { xAxis } = props;
-                      if (!xAxis || !xAxis.scale || !xAxis.domain) return [];
-                      
-                      // Get tick values but exclude the min/max domain values
-                      const ticks = xAxis.scale.ticks();
-                      const [min, max] = xAxis.domain;
-                      
-                      // Filter out any ticks that are exactly at or very close to borders
-                      // Also filter out any ticks that appear to be duplicates (very close to each other)
-                      let filteredTicks: number[] = [];
-                      ticks.forEach((tick: number) => {
-                        // Skip ticks at or very close to domain boundaries
-                        if (Math.abs(tick - min) < 0.01 || Math.abs(tick - max) < 0.01) {
-                          return;
-                        }
-                        
-                        // Skip if very close to an already included tick
-                        const isDuplicate = filteredTicks.some(t => Math.abs(t - tick) < 0.01);
-                        if (!isDuplicate) {
-                          filteredTicks.push(tick);
-                        }
-                      });
-                      
-                      return filteredTicks;
-                    }}
-                  />
+                      )}
+                    />
+                  )}
                   <XAxis 
                     type="number" 
                     dataKey="x" 
@@ -552,26 +618,12 @@ export default function DraggableGraph({
                   <Tooltip contentStyle={{ backgroundColor: 'white', borderRadius: '4px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }} />
                   <Scatter 
                     name={filename || 'Graph'}
-                    data={data}
+                    data={processedData}
                     fill={localColor}
                     opacity={0.8}
-                    shape={(props: any) => {
-                      const { cx, cy, fill } = props;
-                      return (
-                        <circle
-                          cx={cx}
-                          cy={cy}
-                          r={6}
-                          fill={fill}
-                          strokeWidth={2}
-                          stroke="white"
-                          filter="url(#glow)"
-                        />
-                      );
-                    }}
-                    // Ensure points stand out with larger radius and glow effect
+                    shape={renderPoint}
                     legendType="circle"
-                    z={1} // Higher z-index for markers to ensure they're visible
+                    z={1}
                   />
                   {/* Filter for glow effect */}
                   <defs>
