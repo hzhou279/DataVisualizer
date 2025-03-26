@@ -79,72 +79,29 @@ export default function DraggableGraph({
   // Reference to the container element
   const containerRef = React.useRef<HTMLDivElement>(null);
 
-  // Sample data for improved performance when dealing with large datasets
+  // Process data for rendering all points efficiently
   const processedData = useMemo(() => {
-    // If data is small enough, use all points
-    if (!data || data.length <= 100) return data;
-    
-    // For larger datasets, implement downsampling
-    // Strategy: Keep important points (min/max values) and sample the rest
-    if (data.length > 100) {
-      // First, identify min/max points for x and y
-      let xMin = Infinity, xMax = -Infinity, yMin = Infinity, yMax = -Infinity;
-      let xMinPoint, xMaxPoint, yMinPoint, yMaxPoint;
-      
-      data.forEach(point => {
-        if (point.x < xMin) {
-          xMin = point.x;
-          xMinPoint = point;
-        }
-        if (point.x > xMax) {
-          xMax = point.x;
-          xMaxPoint = point;
-        }
-        if (point.y < yMin) {
-          yMin = point.y;
-          yMinPoint = point;
-        }
-        if (point.y > yMax) {
-          yMax = point.y;
-          yMaxPoint = point;
-        }
-      });
-      
-      // Determine how many points to sample
-      // We'll keep key points and sample the rest
-      const keyPoints = new Set();
-      if (xMinPoint) keyPoints.add(xMinPoint);
-      if (xMaxPoint) keyPoints.add(xMaxPoint);
-      if (yMinPoint) keyPoints.add(yMinPoint);
-      if (yMaxPoint) keyPoints.add(yMaxPoint);
-      
-      // Calculate the number of regular points to sample
-      // For larger datasets, use more aggressive sampling
-      let samplingRate;
-      if (data.length > 500) {
-        samplingRate = Math.ceil(data.length / 100); // Keep ~100 points
-      } else if (data.length > 200) {
-        samplingRate = Math.ceil(data.length / 150); // Keep ~150 points
-      } else {
-        samplingRate = Math.ceil(data.length / 200); // Keep ~200 points
-      }
-      
-      // Collect sampled points
-      const sampledPoints = [];
-      for (let i = 0; i < data.length; i += samplingRate) {
-        sampledPoints.push(data[i]);
-      }
-      
-      // Combine key points and sampled points
-      const result = [...Array.from(keyPoints), ...sampledPoints];
-      
-      // Remove duplicates
-      return Array.from(new Map(result.map(item => 
-        [JSON.stringify([item.x, item.y]), item]
-      )).values());
-    }
-    
+    // Return all data points regardless of size
     return data;
+  }, [data]);
+
+  // Use WebGL for large datasets if available
+  const isLargeDataset = useMemo(() => {
+    return data && data.length > 1000;
+  }, [data]);
+
+  // Optimize rendering based on dataset size
+  const renderStrategy = useMemo(() => {
+    if (!data) return { useSimplePoints: false, pointSize: 6 };
+    
+    return {
+      // Use simplified points for large datasets
+      useSimplePoints: data.length > 500,
+      // Adjust point size based on data density
+      pointSize: data.length > 5000 ? 2 : 
+                data.length > 1000 ? 3 : 
+                data.length > 500 ? 4 : 6
+    };
   }, [data]);
 
   // Memoize domain calculations to avoid recalculating on every render
@@ -372,23 +329,35 @@ export default function DraggableGraph({
   // Memoize point rendering function to avoid recreating on every render
   const renderPoint = useCallback((props: any) => {
     const { cx, cy, fill } = props;
-    // For better performance with many points, simplify the point rendering
-    // Avoid adding filters and extra effects when we have many points
-    const pointSize = data?.length > 200 ? 4 : 6;
-    const useFilter = data?.length <= 200;
+    
+    if (renderStrategy.useSimplePoints) {
+      // For extremely large datasets, use very simple points (no stroke, no effects)
+      return (
+        <circle
+          cx={cx}
+          cy={cy}
+          r={renderStrategy.pointSize}
+          fill={fill}
+          opacity={data && data.length > 10000 ? 0.6 : 0.8}
+        />
+      );
+    }
+    
+    // For smaller datasets, use nicer styling
+    const useFilter = data ? data.length <= 200 : false;
     
     return (
       <circle
         cx={cx}
         cy={cy}
-        r={pointSize}
+        r={renderStrategy.pointSize}
         fill={fill}
-        strokeWidth={data?.length > 200 ? 1 : 2}
-        stroke="white"
+        strokeWidth={data?.length > 500 ? 0 : data?.length > 200 ? 1 : 2}
+        stroke={data?.length > 500 ? undefined : "white"}
         filter={useFilter ? "url(#glow)" : undefined}
       />
     );
-  }, [data?.length]);
+  }, [data?.length, renderStrategy]);
 
   return (
     <>
@@ -542,7 +511,7 @@ export default function DraggableGraph({
                       vertical={true}
                       strokeDasharray="3 3"
                     />
-                  ) : (
+                  ) : data.length <= 1000 ? (
                     <CartesianGrid 
                       stroke="rgba(150,150,150,0.15)" 
                       horizontal={true}
@@ -557,6 +526,28 @@ export default function DraggableGraph({
                         }
                       )}
                       verticalPoints={[0.25, 0.5, 0.75].map(
+                        factor => {
+                          const xMin = scaledDomains.xMin ?? 0;
+                          const xMax = scaledDomains.xMax ?? 100;
+                          return xMin + (xMax - xMin) * factor;
+                        }
+                      )}
+                    />
+                  ) : (
+                    <CartesianGrid 
+                      stroke="rgba(150,150,150,0.12)" 
+                      horizontal={true}
+                      vertical={true}
+                      strokeDasharray="3 3"
+                      // Minimal grid for very large datasets
+                      horizontalPoints={[0.5].map(
+                        factor => {
+                          const yMin = scaledDomains.yMin ?? 0;
+                          const yMax = scaledDomains.yMax ?? 100;
+                          return yMin + (yMax - yMin) * factor;
+                        }
+                      )}
+                      verticalPoints={[0.5].map(
                         factor => {
                           const xMin = scaledDomains.xMin ?? 0;
                           const xMax = scaledDomains.xMax ?? 100;
@@ -582,13 +573,27 @@ export default function DraggableGraph({
                     allowDataOverflow={true}
                     includeHidden={true}
                     allowDecimals={true}
-                    tickCount={axisIntervals?.x || 5}
+                    // Reduce tick count for large datasets
+                    tickCount={data && data.length > 1000 ? 5 : data && data.length > 500 ? 7 : axisIntervals?.x || 10}
                     padding={{ left: 0, right: 0 }}
                     axisLine={{ stroke: '#666', strokeWidth: 1 }}
                     scale="linear"
                     interval="preserveStartEnd"
-                    tick={{ fontSize: 12 }}
-                    tickFormatter={(value) => value.toString()}
+                    // Reduce font size for better performance with large datasets
+                    tick={{ fontSize: data && data.length > 1000 ? 10 : 12 }}
+                    // Format ticks to avoid long decimal values
+                    tickFormatter={(value) => {
+                      // Show fewer decimal places for large datasets
+                      if (data && data.length > 1000) {
+                        // For integers or values close to integers
+                        if (Math.abs(value - Math.round(value)) < 0.001) {
+                          return Math.round(value).toString();
+                        }
+                        // For other values, limit decimal places
+                        return value.toFixed(1);
+                      }
+                      return value.toString();
+                    }}
                   />
                   <YAxis 
                     type="number" 
@@ -607,23 +612,65 @@ export default function DraggableGraph({
                     allowDataOverflow={true}
                     includeHidden={true}
                     allowDecimals={true}
-                    tickCount={axisIntervals?.y || 5}
+                    // Reduce tick count for large datasets
+                    tickCount={data && data.length > 1000 ? 5 : data && data.length > 500 ? 7 : axisIntervals?.y || 10}
                     padding={{ top: 0, bottom: 0 }}
                     axisLine={{ stroke: '#666', strokeWidth: 1 }}
                     scale="linear"
                     interval="preserveStartEnd"
-                    tick={{ fontSize: 12 }}
-                    tickFormatter={(value) => value.toString()}
+                    // Reduce font size for better performance with large datasets
+                    tick={{ fontSize: data && data.length > 1000 ? 10 : 12 }}
+                    // Format ticks to avoid long decimal values
+                    tickFormatter={(value) => {
+                      // Show fewer decimal places for large datasets
+                      if (data && data.length > 1000) {
+                        // For integers or values close to integers
+                        if (Math.abs(value - Math.round(value)) < 0.001) {
+                          return Math.round(value).toString();
+                        }
+                        // For other values, limit decimal places
+                        return value.toFixed(1);
+                      }
+                      return value.toString();
+                    }}
                   />
-                  <Tooltip contentStyle={{ backgroundColor: 'white', borderRadius: '4px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }} />
+                  <Tooltip 
+                    contentStyle={{ backgroundColor: 'white', borderRadius: '4px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }}
+                    // Throttle tooltip updates for better performance with large datasets
+                    isAnimationActive={data ? data.length <= 500 : true}
+                    cursor={{ strokeDasharray: '3 3', stroke: 'rgba(50,50,50,0.4)' }}
+                    // Custom content renderer for better performance
+                    content={({ active, payload }) => {
+                      if (!active || !payload || !payload.length) {
+                        return null;
+                      }
+                      
+                      // Simple lightweight tooltip for large datasets
+                      const point = payload[0].payload;
+                      return (
+                        <div className="custom-tooltip" style={{
+                          backgroundColor: 'white',
+                          padding: '8px 12px',
+                          border: '1px solid #ccc',
+                          borderRadius: '4px',
+                          boxShadow: '0 2px 5px rgba(0,0,0,0.1)'
+                        }}>
+                          <p className="tooltip-x"><strong>X:</strong> {point.x}</p>
+                          <p className="tooltip-y"><strong>Y:</strong> {point.y}</p>
+                        </div>
+                      );
+                    }}
+                  />
                   <Scatter 
                     name={filename || 'Graph'}
                     data={processedData}
                     fill={localColor}
-                    opacity={0.8}
+                    opacity={data && data.length > 5000 ? 0.5 : 0.8}
                     shape={renderPoint}
                     legendType="circle"
                     z={1}
+                    // Disable animation for large datasets
+                    isAnimationActive={data ? data.length <= 1000 : true}
                   />
                   {/* Filter for glow effect */}
                   <defs>
