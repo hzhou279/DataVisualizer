@@ -47,7 +47,7 @@ export default function Home() {
   const [selectedDataGraphId, setSelectedDataGraphId] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [zIndexCounter, setZIndexCounter] = useState(100);
-  const [showGrid, setShowGrid] = useState(false);
+  const [showGrid, setShowGrid] = useState(true);
   const [gridSize, setGridSize] = useState(50);
   const [showGridLabels, setShowGridLabels] = useState(true);
 
@@ -97,7 +97,7 @@ export default function Home() {
       rotationCenter: { x: 0, y: 0 }
     };
     
-    setGraphs([...graphs, newGraph]);
+    setGraphs(prevGraphs => [...prevGraphs, newGraph]);
   };
 
   const handlePositionUpdate = (graphId: string, x: number, y: number) => {
@@ -163,6 +163,22 @@ export default function Home() {
         if (graph.id === graphId) {
           // Handle domains from data if provided
           let updatedGraph = { ...graph, ...updatedProps };
+          
+          // If global coordinates are being updated, update the position
+          if (updatedProps.globalCoordinate) {
+            const currentGlobal = graph.globalCoordinate || { x: 0, y: 0 };
+            const newGlobal = updatedProps.globalCoordinate;
+            
+            // Calculate position delta based on global coordinate change
+            const deltaX = newGlobal.x - currentGlobal.x;
+            const deltaY = newGlobal.y - currentGlobal.y;
+            
+            // Update position to maintain the same visual position with new global coordinates
+            updatedGraph.position = {
+              x: graph.position.x + deltaX,
+              y: graph.position.y + deltaY
+            };
+          }
           
           if (updatedProps.data && updatedProps.data[0]?.domains) {
             // Extract domains from first data point if provided
@@ -294,29 +310,27 @@ export default function Home() {
             >
               {showGrid ? 'Hide Grid' : 'Show Grid'}
             </button>
-            {showGrid && (
-              <div className="flex items-center space-x-2 bg-white px-2 py-1 rounded-md border border-gray-300">
-                <label className="text-xs text-gray-600">Grid size:</label>
-                <select 
-                  value={gridSize} 
-                  onChange={(e) => setGridSize(Number(e.target.value))}
-                  className="text-xs border border-gray-300 rounded p-1"
-                >
-                  <option value="25">25px</option>
-                  <option value="50">50px</option>
-                  <option value="100">100px</option>
-                </select>
-                <label className="flex items-center text-xs text-gray-600">
-                  <input 
-                    type="checkbox" 
-                    checked={showGridLabels} 
-                    onChange={() => setShowGridLabels(!showGridLabels)}
-                    className="mr-1"
-                  />
-                  Labels
-                </label>
-              </div>
-            )}
+            <div className="flex items-center space-x-2 bg-white px-2 py-1 rounded-md border border-gray-300">
+              <label className="text-xs text-gray-600">Grid size:</label>
+              <select 
+                value={gridSize} 
+                onChange={(e) => setGridSize(Number(e.target.value))}
+                className="text-xs border border-gray-300 rounded p-1"
+              >
+                <option value="25">25px</option>
+                <option value="50">50px</option>
+                <option value="100">100px</option>
+              </select>
+              <label className="flex items-center text-xs text-gray-600">
+                <input 
+                  type="checkbox" 
+                  checked={showGridLabels} 
+                  onChange={() => setShowGridLabels(!showGridLabels)}
+                  className="mr-1"
+                />
+                Labels
+              </label>
+            </div>
           </div>
           <div className="w-52">
             <FileUploader onDataParsed={handleFileProcessed} />
@@ -326,73 +340,90 @@ export default function Home() {
       
       <main className="flex-1 flex flex-col">
         <div className="bg-white rounded-lg shadow-xl flex-1 flex flex-col relative" style={{ height: 'calc(100vh - 200px)', overflow: 'visible' }}>
+          {/* Coordinate Grid - Always render but control visibility with opacity */}
+          <div 
+            style={{ 
+              opacity: showGrid ? 1 : 0, 
+              transition: 'opacity 0.2s ease-in-out', 
+              position: 'absolute', 
+              top: 0, 
+              left: 0, 
+              right: 0, 
+              bottom: 0, 
+              pointerEvents: 'none',
+              zIndex: 99 // Set a z-index just below the graphs
+            }}
+          >
+            <GlobalCoordinateGrid gridSize={gridSize} showLabels={showGridLabels} />
+          </div>
+          
           {/* Graph Area */}
           <div className="flex-1 p-4 relative">
             <div className="relative w-full h-full">
-              {/* Coordinate Grid */}
-              {showGrid && <GlobalCoordinateGrid gridSize={gridSize} showLabels={showGridLabels} />}
-              
-              {graphs.length > 0 ? (
-                graphs.map((graph, index) => (
-                  <DraggableGraph
-                    key={graph.id}
-                    data={graph.data}
-                    filename={graph.filename || graph.title || 'Graph'}
-                    position={graph.position}
-                    size={graph.size}
-                    rotation={graph.rotation}
-                    zIndex={graph.zIndex || 100 + index}
-                    onPositionChange={(x, y) => handlePositionUpdate(graph.id, x, y)}
-                    onSizeChange={(width, height) => handleSizeUpdate(graph.id, width, height)}
-                    onRotationChange={(rotation) => handleRotationUpdate(graph.id, rotation)}
-                    color={graph.color}
-                    onColorChange={(color) => handleColorChange(graph.id, color)}
-                    onRemove={() => handleRemoveGraph(graph.id)}
-                    isSettingsOpen={selectedGraphId === graph.id}
-                    onToggleSettings={() => {
-                      if (selectedGraphId === graph.id) {
-                        setSelectedGraphId(null);
-                        setShowSettings(false);
-                      } else {
-                        setSelectedGraphId(graph.id);
-                        setShowSettings(true);
-                        // Close data panel if different graph is selected for settings
-                        if (selectedDataGraphId !== graph.id) {
-                          setSelectedDataGraphId(null);
-                        }
-                        bringGraphToFront(graph.id);
-                      }
-                    }}
-                    domains={graph.domains}
-                    axisIntervals={graph.axisIntervals}
-                    quadrantMode={graph.quadrantMode}
-                    onDataPanelToggle={() => {
-                      if (selectedDataGraphId === graph.id) {
-                        setSelectedDataGraphId(null);
-                      } else {
-                        setSelectedDataGraphId(graph.id);
-                        // Close settings panel if different graph is selected for data
-                        if (selectedGraphId !== graph.id) {
+              {/* Graph Container */}
+              <div className="relative w-full h-full">
+                {graphs.length > 0 ? (
+                  graphs.map((graph, index) => (
+                    <DraggableGraph
+                      key={graph.id}
+                      data={graph.data}
+                      filename={graph.filename || graph.title || 'Graph'}
+                      position={graph.position}
+                      size={graph.size}
+                      rotation={graph.rotation}
+                      zIndex={graph.zIndex || 100 + index}
+                      onPositionChange={(x, y) => handlePositionUpdate(graph.id, x, y)}
+                      onSizeChange={(width, height) => handleSizeUpdate(graph.id, width, height)}
+                      onRotationChange={(rotation) => handleRotationUpdate(graph.id, rotation)}
+                      color={graph.color}
+                      onColorChange={(color) => handleColorChange(graph.id, color)}
+                      onRemove={() => handleRemoveGraph(graph.id)}
+                      isSettingsOpen={selectedGraphId === graph.id}
+                      onToggleSettings={() => {
+                        if (selectedGraphId === graph.id) {
                           setSelectedGraphId(null);
+                          setShowSettings(false);
+                        } else {
+                          setSelectedGraphId(graph.id);
+                          setShowSettings(true);
+                          // Close data panel if different graph is selected for settings
+                          if (selectedDataGraphId !== graph.id) {
+                            setSelectedDataGraphId(null);
+                          }
+                          bringGraphToFront(graph.id);
                         }
-                        bringGraphToFront(graph.id);
-                      }
-                    }}
-                  />
-                ))
-              ) : (
-                <div className="flex items-center justify-center h-full">
-                  <div className="text-center">
-                    <div className="bg-indigo-50 p-6 rounded-full inline-block mb-4 shadow-sm">
-                      <svg className="h-16 w-16 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                      </svg>
+                      }}
+                      domains={graph.domains}
+                      axisIntervals={graph.axisIntervals}
+                      quadrantMode={graph.quadrantMode}
+                      onDataPanelToggle={() => {
+                        if (selectedDataGraphId === graph.id) {
+                          setSelectedDataGraphId(null);
+                        } else {
+                          setSelectedDataGraphId(graph.id);
+                          // Close settings panel if different graph is selected for data
+                          if (selectedGraphId !== graph.id) {
+                            setSelectedGraphId(null);
+                          }
+                          bringGraphToFront(graph.id);
+                        }
+                      }}
+                    />
+                  ))
+                ) : (
+                  <div className="flex items-center justify-center h-full">
+                    <div className="text-center">
+                      <div className="bg-indigo-50 p-6 rounded-full inline-block mb-4 shadow-sm">
+                        <svg className="h-16 w-16 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                      </div>
+                      <h3 className="text-xl font-medium text-gray-900">No graphs yet</h3>
+                      <p className="text-gray-600 mt-2 max-w-md mx-auto">Upload a CSV file to get started with interactive data visualization</p>
                     </div>
-                    <h3 className="text-xl font-medium text-gray-900">No graphs yet</h3>
-                    <p className="text-gray-600 mt-2 max-w-md mx-auto">Upload a CSV file to get started with interactive data visualization</p>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </div>
         </div>
