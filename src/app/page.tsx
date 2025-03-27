@@ -289,6 +289,17 @@ export default function Home() {
     setSelectedGraphId(null);
   };
 
+  // Handle bringing a graph to the front when clicked
+  const handleGraphClick = (id: string) => {
+    // Find the maximum z-index
+    const maxZIndex = Math.max(...graphs.map(g => g.zIndex || 0), 100);
+    
+    // Update the z-index for the clicked graph
+    setGraphs(graphs.map(graph => 
+      graph.id === id ? { ...graph, zIndex: maxZIndex + 1 } : graph
+    ));
+  };
+
   const selectedGraph = graphs.find(graph => graph.id === selectedGraphId);
   const selectedDataGraph = graphs.find(graph => graph.id === selectedDataGraphId);
 
@@ -360,6 +371,7 @@ export default function Home() {
                       }
                     }
                   }}
+                  onClick={() => handleGraphClick(graph.id)}
                 />
               ))
             ) : (

@@ -144,16 +144,16 @@ export default function GlobalCoordinateGrid({ gridSize = 50, showLabels = true 
               y1="0" 
               x2={gridSize} 
               y2="0" 
-              stroke="rgba(0,0,0,0.1)" 
-              strokeWidth={0.5}
+              stroke="rgba(0,0,0,0.2)" 
+              strokeWidth={1}
             />
             <line 
               x1="0" 
               y1="0" 
               x2="0" 
               y2={gridSize} 
-              stroke="rgba(0,0,0,0.1)" 
-              strokeWidth={0.5}
+              stroke="rgba(0,0,0,0.2)" 
+              strokeWidth={1}
             />
             {/* Dotted lines for better visibility */}
             <line
@@ -161,8 +161,8 @@ export default function GlobalCoordinateGrid({ gridSize = 50, showLabels = true 
               y1={gridSize/2}
               x2={gridSize}
               y2={gridSize/2}
-              stroke="rgba(0,0,0,0.05)"
-              strokeWidth={0.5}
+              stroke="rgba(0,0,0,0.1)"
+              strokeWidth={0.7}
               strokeDasharray="1,3"
             />
             <line
@@ -170,8 +170,8 @@ export default function GlobalCoordinateGrid({ gridSize = 50, showLabels = true 
               y1="0"
               x2={gridSize/2}
               y2={gridSize}
-              stroke="rgba(0,0,0,0.05)"
-              strokeWidth={0.5}
+              stroke="rgba(0,0,0,0.1)"
+              strokeWidth={0.7}
               strokeDasharray="1,3"
             />
           </pattern>
@@ -184,8 +184,8 @@ export default function GlobalCoordinateGrid({ gridSize = 50, showLabels = true 
           width={dimensions.width - PADDING.LEFT - PADDING.RIGHT} 
           height={dimensions.height - PADDING.TOP - PADDING.BOTTOM} 
           fill="url(#grid)" 
-          stroke="rgba(0,0,0,0.1)"
-          strokeWidth={0.5}
+          stroke="rgba(0,0,0,0.25)"
+          strokeWidth={1}
         />
 
         {/* Draw explicit grid lines for better visibility */}
@@ -198,8 +198,8 @@ export default function GlobalCoordinateGrid({ gridSize = 50, showLabels = true 
               y1={PADDING.TOP}
               x2={PADDING.LEFT + i * gridSize}
               y2={dimensions.height - PADDING.BOTTOM}
-              stroke="rgba(0,0,0,0.1)"
-              strokeWidth={0.5}
+              stroke="rgba(0,0,0,0.2)"
+              strokeWidth={1}
             />
           ))}
           {/* Horizontal grid lines */}
@@ -210,8 +210,8 @@ export default function GlobalCoordinateGrid({ gridSize = 50, showLabels = true 
               y1={PADDING.TOP + i * gridSize}
               x2={dimensions.width - PADDING.RIGHT}
               y2={PADDING.TOP + i * gridSize}
-              stroke="rgba(0,0,0,0.1)"
-              strokeWidth={0.5}
+              stroke="rgba(0,0,0,0.2)"
+              strokeWidth={1}
             />
           ))}
         </g>
@@ -222,16 +222,16 @@ export default function GlobalCoordinateGrid({ gridSize = 50, showLabels = true 
           y1={PADDING.TOP} 
           x2={dimensions.width - PADDING.RIGHT} 
           y2={PADDING.TOP} 
-          stroke="rgba(0,0,0,0.3)" 
-          strokeWidth={1} 
+          stroke="rgba(0,0,0,0.5)" 
+          strokeWidth={1.5} 
         />
         <line 
           x1={PADDING.LEFT} 
           y1={PADDING.TOP} 
           x2={PADDING.LEFT} 
           y2={dimensions.height - PADDING.BOTTOM} 
-          stroke="rgba(0,0,0,0.3)" 
-          strokeWidth={1} 
+          stroke="rgba(0,0,0,0.5)" 
+          strokeWidth={1.5} 
         />
 
         {/* Coordinate markers */}
