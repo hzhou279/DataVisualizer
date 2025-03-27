@@ -5,6 +5,7 @@ import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 import { validateCSVFormat, parseCSVData } from '../utils/csvParser';
 import { ParsedData } from '../utils/csvParser';
+import React from 'react';
 
 interface FileUploaderProps {
   onDataParsed: (data: ParsedData[], fileName: string) => void;
@@ -12,6 +13,7 @@ interface FileUploaderProps {
 
 export default function FileUploader({ onDataParsed }: FileUploaderProps) {
   const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -33,11 +35,20 @@ export default function FileUploader({ onDataParsed }: FileUploaderProps) {
       } else {
         alert('Unsupported file format. Please upload a CSV, XLSX, or XLS file.');
         setIsUploading(false);
+        resetFileInput();
       }
     } catch (error) {
       console.error('Error processing file:', error);
       alert('Error processing file. Please try again with a valid file.');
       setIsUploading(false);
+      resetFileInput();
+    }
+  };
+
+  // Function to reset the file input
+  const resetFileInput = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
   };
 
@@ -48,6 +59,7 @@ export default function FileUploader({ onDataParsed }: FileUploaderProps) {
         if (!validateCSVFormat(results.data)) {
           alert('Invalid CSV format. Please ensure your file has at least two columns of numeric data.');
           setIsUploading(false);
+          resetFileInput();
           return;
         }
         
@@ -55,15 +67,18 @@ export default function FileUploader({ onDataParsed }: FileUploaderProps) {
         if (parsedData.length === 0) {
           alert('No valid data points found in the file. Please ensure your file contains numeric data.');
           setIsUploading(false);
+          resetFileInput();
           return;
         }
         
         onDataParsed(parsedData, fileName);
         setIsUploading(false);
+        resetFileInput();
       },
       error: () => {
         alert('Error parsing CSV file. Please check the file format.');
         setIsUploading(false);
+        resetFileInput();
       }
     });
   };
@@ -90,6 +105,7 @@ export default function FileUploader({ onDataParsed }: FileUploaderProps) {
         if (!jsonData || jsonData.length === 0) {
           alert('No data found in the Excel file.');
           setIsUploading(false);
+          resetFileInput();
           return;
         }
         
@@ -97,6 +113,7 @@ export default function FileUploader({ onDataParsed }: FileUploaderProps) {
         if (!validateCSVFormat(jsonData)) {
           alert('Invalid Excel format. Please ensure your file has at least two columns of numeric data.');
           setIsUploading(false);
+          resetFileInput();
           return;
         }
         
@@ -106,21 +123,25 @@ export default function FileUploader({ onDataParsed }: FileUploaderProps) {
         if (parsedData.length === 0) {
           alert('No valid data points found in the file. Please ensure your file contains numeric data.');
           setIsUploading(false);
+          resetFileInput();
           return;
         }
         
         onDataParsed(parsedData, fileName);
         setIsUploading(false);
+        resetFileInput();
       } catch (error) {
         console.error('Error in fallback Excel parsing:', error);
         alert('Could not parse the Excel file. Please ensure the file is a valid Excel file with numeric data.');
         setIsUploading(false);
+        resetFileInput();
       }
     };
     
     reader.onerror = () => {
       alert('Error reading Excel file.');
       setIsUploading(false);
+      resetFileInput();
     };
     
     reader.readAsBinaryString(file);
@@ -135,6 +156,7 @@ export default function FileUploader({ onDataParsed }: FileUploaderProps) {
         if (!data) {
           alert('Error reading Excel file.');
           setIsUploading(false);
+          resetFileInput();
           return;
         }
         
@@ -153,6 +175,7 @@ export default function FileUploader({ onDataParsed }: FileUploaderProps) {
           if (jsonData.length <= 1) { // Check if there's only a header row or no data
             alert('No data found in the Excel file. Please ensure your file contains data.');
             setIsUploading(false);
+            resetFileInput();
             return;
           }
           
@@ -171,6 +194,7 @@ export default function FileUploader({ onDataParsed }: FileUploaderProps) {
           if (!validateCSVFormat(formattedData)) {
             alert('Invalid Excel format. Please ensure your file has at least two columns of numeric data.');
             setIsUploading(false);
+            resetFileInput();
             return;
           }
           
@@ -178,11 +202,13 @@ export default function FileUploader({ onDataParsed }: FileUploaderProps) {
           if (parsedData.length === 0) {
             alert('No valid data points found in the file. Please ensure your file contains numeric data.');
             setIsUploading(false);
+            resetFileInput();
             return;
           }
           
           onDataParsed(parsedData, fileName);
           setIsUploading(false);
+          resetFileInput();
         } catch (error) {
           console.error('Error parsing Excel file with primary method:', error);
           // Try fallback method
@@ -193,6 +219,7 @@ export default function FileUploader({ onDataParsed }: FileUploaderProps) {
       reader.onerror = () => {
         alert('Error reading Excel file.');
         setIsUploading(false);
+        resetFileInput();
       };
       
       // Use readAsArrayBuffer instead of readAsBinaryString
@@ -212,6 +239,7 @@ export default function FileUploader({ onDataParsed }: FileUploaderProps) {
         </svg>
         {isUploading ? 'Uploading...' : 'Upload CSV/Excel'}
         <input 
+          ref={fileInputRef}
           type="file" 
           className="hidden" 
           accept=".csv,.xlsx,.xls" 
