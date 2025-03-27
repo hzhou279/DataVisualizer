@@ -147,23 +147,57 @@ export default function DraggableGraph({
     setScaledDomains(calculatedDomains);
   }, [calculatedDomains]);
 
-  // Only set initial size once when component mounts, not on every data/domains change
+  // Handle window resize to adapt graph size
   useEffect(() => {
-    if (!isMinimized && data && data.length > 0) {
-      // Calculate reasonable size constraints
-      const minWidth = 400;
-      const minHeight = 300;
-      const maxWidth = Math.min(800, window.innerWidth * 0.7);
-      const maxHeight = Math.min(600, window.innerHeight * 0.7);
-      
-      // Only adjust on first render or if size is outside bounds
-      if (size.width < minWidth || size.height < minHeight || size.width > maxWidth || size.height > maxHeight) {
-        const newWidth = Math.min(Math.max(size.width, minWidth), maxWidth);
-        const newHeight = Math.min(Math.max(size.height, minHeight), maxHeight);
-        onSizeChange(newWidth, newHeight);
+    // Function to calculate and apply appropriate graph dimensions
+    const calculateAndApplyDimensions = () => {
+      if (!isMinimized && data && data.length > 0) {
+        const minWidth = 400;
+        const minHeight = 300;
+        const maxWidth = Math.min(800, window.innerWidth * 0.7);
+        const maxHeight = Math.min(600, window.innerHeight * 0.7);
+        
+        // Check if current dimensions need adjustment
+        let newWidth = size.width;
+        let newHeight = size.height;
+        let needsUpdate = false;
+        
+        // Check width constraints
+        if (size.width > maxWidth) {
+          newWidth = maxWidth;
+          needsUpdate = true;
+        } else if (size.width < minWidth) {
+          newWidth = minWidth;
+          needsUpdate = true;
+        }
+        
+        // Check height constraints
+        if (size.height > maxHeight) {
+          newHeight = maxHeight;
+          needsUpdate = true;
+        } else if (size.height < minHeight) {
+          newHeight = minHeight;
+          needsUpdate = true;
+        }
+        
+        // Only update if dimensions need to change
+        if (needsUpdate) {
+          onSizeChange(newWidth, newHeight);
+        }
       }
-    }
-  }, []); // Empty dependency array means this runs once on mount
+    };
+    
+    // Apply dimensions on mount
+    calculateAndApplyDimensions();
+    
+    // Set up window resize listener
+    const handleResize = () => {
+      calculateAndApplyDimensions();
+    };
+    
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [isMinimized, data, size.width, size.height, onSizeChange]);
 
   // Sync local rotation with prop when it changes externally
   useEffect(() => {
@@ -203,6 +237,14 @@ export default function DraggableGraph({
       }
     }
   }, [domains]);
+
+  // Sync settings open state with UI
+  useEffect(() => {
+    // When settings panel is closed, reset the button state
+    if (!isSettingsOpen) {
+      // Reset any local state related to settings if needed
+    }
+  }, [isSettingsOpen]);
 
   const handleRotationInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setRotationValue(e.target.value);
@@ -366,7 +408,7 @@ export default function DraggableGraph({
         style={containerStyle} 
         className="graph-container"
       >
-        <div className="bg-transparent border border-gray-200 rounded-lg shadow-lg h-full flex flex-col overflow-hidden">
+        <div className="bg-transparent border border-black rounded-lg shadow-lg h-full flex flex-col overflow-hidden">
           {/* Header with drag handle */}
           <div 
             className="handle bg-blue-50 p-2 border-b border-gray-200 flex justify-between items-center cursor-move"
@@ -464,7 +506,11 @@ export default function DraggableGraph({
                   e.stopPropagation();
                   onToggleSettings();
                 }}
-                className={`p-1 text-gray-500 hover:text-gray-700 rounded ${isSettingsOpen ? 'bg-blue-100' : 'bg-white'}`}
+                className={`p-1 rounded transition-colors duration-200 ${
+                  isSettingsOpen 
+                    ? 'bg-blue-100 text-blue-700 hover:bg-blue-200' 
+                    : 'bg-white text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                }`}
                 title="Settings"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -506,26 +552,26 @@ export default function DraggableGraph({
                   {/* Conditionally render grid based on data size */}
                   {(!data || data.length <= 300) ? (
                     <CartesianGrid 
-                      stroke="rgba(150,150,150,0.15)" 
+                      stroke="rgba(0,0,0,0.15)" 
                       horizontal={true}
                       vertical={true}
-                      strokeDasharray="3 3"
+                      strokeDasharray="0"
                     />
                   ) : data.length <= 1000 ? (
                     <CartesianGrid 
-                      stroke="rgba(150,150,150,0.15)" 
+                      stroke="rgba(0,0,0,0.15)" 
                       horizontal={true}
                       vertical={true}
-                      strokeDasharray="3 3"
-                      // Reduce grid lines for better performance with large datasets
-                      horizontalPoints={[0.25, 0.5, 0.75].map(
+                      strokeDasharray="0"
+                      // Five equal intervals (matching the axis ticks)
+                      horizontalPoints={[0.2, 0.4, 0.6, 0.8].map(
                         factor => {
                           const yMin = scaledDomains.yMin ?? 0;
                           const yMax = scaledDomains.yMax ?? 100;
                           return yMin + (yMax - yMin) * factor;
                         }
                       )}
-                      verticalPoints={[0.25, 0.5, 0.75].map(
+                      verticalPoints={[0.2, 0.4, 0.6, 0.8].map(
                         factor => {
                           const xMin = scaledDomains.xMin ?? 0;
                           const xMax = scaledDomains.xMax ?? 100;
@@ -535,19 +581,20 @@ export default function DraggableGraph({
                     />
                   ) : (
                     <CartesianGrid 
-                      stroke="rgba(150,150,150,0.12)" 
+                      stroke="rgba(0,0,0,0.15)" 
                       horizontal={true}
                       vertical={true}
-                      strokeDasharray="3 3"
-                      // Minimal grid for very large datasets
-                      horizontalPoints={[0.5].map(
+                      strokeDasharray="0"
+                      strokeWidth={1}
+                      // Five equal intervals (matching the axis ticks)
+                      horizontalPoints={[0.2, 0.4, 0.6, 0.8].map(
                         factor => {
                           const yMin = scaledDomains.yMin ?? 0;
                           const yMax = scaledDomains.yMax ?? 100;
                           return yMin + (yMax - yMin) * factor;
                         }
                       )}
-                      verticalPoints={[0.5].map(
+                      verticalPoints={[0.2, 0.4, 0.6, 0.8].map(
                         factor => {
                           const xMin = scaledDomains.xMin ?? 0;
                           const xMax = scaledDomains.xMax ?? 100;
@@ -573,26 +620,27 @@ export default function DraggableGraph({
                     allowDataOverflow={true}
                     includeHidden={true}
                     allowDecimals={true}
-                    // Reduce tick count for large datasets
-                    tickCount={data && data.length > 1000 ? 5 : data && data.length > 500 ? 7 : axisIntervals?.x || 10}
+                    // Force exactly 5 intervals by using explicit ticks
+                    ticks={(() => {
+                      const min = scaledDomains.xMin ?? 0;
+                      const max = scaledDomains.xMax ?? 100;
+                      const step = (max - min) / 5;
+                      return [min, min + step, min + 2*step, min + 3*step, min + 4*step, max];
+                    })()}
                     padding={{ left: 0, right: 0 }}
-                    axisLine={{ stroke: '#666', strokeWidth: 1 }}
+                    axisLine={{ stroke: '#000', strokeWidth: 1.5 }}
                     scale="linear"
-                    interval="preserveStartEnd"
+                    // Remove interval specification to avoid conflict with ticks
                     // Reduce font size for better performance with large datasets
                     tick={{ fontSize: data && data.length > 1000 ? 10 : 12 }}
                     // Format ticks to avoid long decimal values
                     tickFormatter={(value) => {
-                      // Show fewer decimal places for large datasets
-                      if (data && data.length > 1000) {
-                        // For integers or values close to integers
-                        if (Math.abs(value - Math.round(value)) < 0.001) {
-                          return Math.round(value).toString();
-                        }
-                        // For other values, limit decimal places
-                        return value.toFixed(1);
+                      // For integers or values close to integers
+                      if (Math.abs(value - Math.round(value)) < 0.001) {
+                        return Math.round(value).toString();
                       }
-                      return value.toString();
+                      // For other values, limit decimal places
+                      return value.toFixed(1);
                     }}
                   />
                   <YAxis 
@@ -612,26 +660,27 @@ export default function DraggableGraph({
                     allowDataOverflow={true}
                     includeHidden={true}
                     allowDecimals={true}
-                    // Reduce tick count for large datasets
-                    tickCount={data && data.length > 1000 ? 5 : data && data.length > 500 ? 7 : axisIntervals?.y || 10}
+                    // Force exactly 5 intervals by using explicit ticks
+                    ticks={(() => {
+                      const min = scaledDomains.yMin ?? 0;
+                      const max = scaledDomains.yMax ?? 100;
+                      const step = (max - min) / 5;
+                      return [min, min + step, min + 2*step, min + 3*step, min + 4*step, max];
+                    })()}
                     padding={{ top: 0, bottom: 0 }}
-                    axisLine={{ stroke: '#666', strokeWidth: 1 }}
+                    axisLine={{ stroke: '#000', strokeWidth: 1.5 }}
                     scale="linear"
-                    interval="preserveStartEnd"
+                    // Remove interval specification to avoid conflict with ticks
                     // Reduce font size for better performance with large datasets
                     tick={{ fontSize: data && data.length > 1000 ? 10 : 12 }}
                     // Format ticks to avoid long decimal values
                     tickFormatter={(value) => {
-                      // Show fewer decimal places for large datasets
-                      if (data && data.length > 1000) {
-                        // For integers or values close to integers
-                        if (Math.abs(value - Math.round(value)) < 0.001) {
-                          return Math.round(value).toString();
-                        }
-                        // For other values, limit decimal places
-                        return value.toFixed(1);
+                      // For integers or values close to integers
+                      if (Math.abs(value - Math.round(value)) < 0.001) {
+                        return Math.round(value).toString();
                       }
-                      return value.toString();
+                      // For other values, limit decimal places
+                      return value.toFixed(1);
                     }}
                   />
                   <Tooltip 
@@ -662,15 +711,29 @@ export default function DraggableGraph({
                     }}
                   />
                   <Scatter 
-                    name={filename || 'Graph'}
+                    name="Data Points"
                     data={processedData}
-                    fill={localColor}
-                    opacity={data && data.length > 5000 ? 0.5 : 0.8}
-                    shape={renderPoint}
-                    legendType="circle"
-                    z={1}
-                    // Disable animation for large datasets
-                    isAnimationActive={data ? data.length <= 1000 : true}
+                    fill={color}
+                    stroke={color}
+                    strokeWidth={2}
+                    fillOpacity={0.8}
+                    strokeOpacity={0.9}
+                    shape={(props: any) => {
+                      // Custom shape for optimal performance
+                      const { cx, cy } = props;
+                      return (
+                        <circle 
+                          cx={cx} 
+                          cy={cy} 
+                          r={renderStrategy.pointSize} 
+                          fill={color}
+                          fillOpacity={0.8}
+                          stroke={color}
+                          strokeWidth={1.5}
+                          strokeOpacity={0.9}
+                        />
+                      );
+                    }}
                   />
                   {/* Filter for glow effect */}
                   <defs>
@@ -696,17 +759,19 @@ export default function DraggableGraph({
           <>
             <div className="absolute top-0 left-0 w-full h-4 cursor-ns-resize resize-handle" 
                  onMouseDown={(e) => handleDrag(e, 'top')}></div>
-            <div className="absolute top-0 right-0 w-2 h-2 cursor-nesw-resize resize-handle" 
+            <div className="absolute top-0 right-0 w-4 h-4 cursor-nesw-resize resize-handle" 
                  onMouseDown={(e) => handleDrag(e, 'topRight')}></div>
             <div className="absolute bottom-0 left-0 w-full h-4 cursor-ns-resize resize-handle" 
                  onMouseDown={(e) => handleDrag(e, 'bottom')}></div>
-            <div className="absolute top-0 left-0 w-2 h-2 cursor-ew-resize resize-handle" 
+            <div className="absolute top-0 left-0 h-full w-4 cursor-ew-resize resize-handle" 
                  onMouseDown={(e) => handleDrag(e, 'left')}></div>
-            <div className="absolute bottom-0 right-0 w-2 h-2 cursor-nwse-resize resize-handle" 
+            <div className="absolute top-0 right-0 h-full w-4 cursor-ew-resize resize-handle" 
+                 onMouseDown={(e) => handleDrag(e, 'right')}></div>
+            <div className="absolute bottom-0 right-0 w-4 h-4 cursor-nwse-resize resize-handle" 
                  onMouseDown={(e) => handleDrag(e, 'bottomRight')}></div>
-            <div className="absolute bottom-0 left-0 w-2 h-2 cursor-nesw-resize resize-handle" 
+            <div className="absolute bottom-0 left-0 w-4 h-4 cursor-nesw-resize resize-handle" 
                  onMouseDown={(e) => handleDrag(e, 'bottomLeft')}></div>
-            <div className="absolute top-0 left-0 w-2 h-2 cursor-nwse-resize resize-handle" 
+            <div className="absolute top-0 left-0 w-4 h-4 cursor-nwse-resize resize-handle" 
                  onMouseDown={(e) => handleDrag(e, 'topLeft')}></div>
           </>
         )}
@@ -776,7 +841,7 @@ export default function DraggableGraph({
       const maxWidth = 800;  // Hard limit regardless of window size
       const maxHeight = 600; // Hard limit regardless of window size
       
-      if (direction.includes('right')) {
+      if (direction.includes('right') && !direction.includes('top') && !direction.includes('bottom')) {
         newWidth = Math.max(minWidth, initialWidth + dx);
         newLeft = initialLeft;
       }
