@@ -293,167 +293,112 @@ export default function Home() {
   const selectedDataGraph = graphs.find(graph => graph.id === selectedDataGraphId);
 
   return (
-    <div className="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen flex flex-col p-4">
-      <header className="mb-6 flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold text-indigo-900">CSV Graph Visualizer</h1>
-          <p className="text-sm text-indigo-700 mt-1">Upload CSV files to visualize data as interactive scatter plots</p>
-        </div>
-        <div className="flex items-center space-x-4">
-          <div className="flex items-center space-x-2">
+    <div className="flex h-screen overflow-hidden bg-gray-100">
+      {/* Main content area */}
+      <div className="flex-1 flex flex-col min-h-0">
+        {/* Header with controls */}
+        <div className="flex justify-between items-center p-3 bg-white border-b">
+          <div className="flex items-center space-x-6">
+            <div>
+              <h1 className="text-xl font-semibold text-gray-900">CSV Graph Visualizer</h1>
+              <p className="text-sm text-gray-500">Upload CSV files to visualize data</p>
+            </div>
             <button 
               onClick={() => setShowGrid(!showGrid)}
               className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                showGrid ? 'bg-indigo-600 text-white' : 'bg-white text-indigo-600 border border-indigo-300'
+                showGrid ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600'
               }`}
-              title="Toggle coordinate grid"
             >
               {showGrid ? 'Hide Grid' : 'Show Grid'}
             </button>
-            <div className="flex items-center space-x-2 bg-white px-2 py-1 rounded-md border border-gray-300">
-              <label className="text-xs text-gray-600">Grid size:</label>
-              <select 
-                value={gridSize} 
-                onChange={(e) => setGridSize(Number(e.target.value))}
-                className="text-xs border border-gray-300 rounded p-1"
-              >
-                <option value="25">25px</option>
-                <option value="50">50px</option>
-                <option value="100">100px</option>
-              </select>
-              <label className="flex items-center text-xs text-gray-600">
-                <input 
-                  type="checkbox" 
-                  checked={showGridLabels} 
-                  onChange={() => setShowGridLabels(!showGridLabels)}
-                  className="mr-1"
-                />
-                Labels
-              </label>
-            </div>
           </div>
           <div className="w-52">
             <FileUploader onDataParsed={handleFileProcessed} />
           </div>
         </div>
-      </header>
-      
-      <main className="flex-1 flex flex-col">
-        <div className="bg-white rounded-lg shadow-xl flex-1 flex flex-col relative" style={{ height: 'calc(100vh - 200px)', overflow: 'visible' }}>
-          {/* Coordinate Grid - Always render but control visibility with opacity */}
-          <div 
-            style={{ 
-              opacity: showGrid ? 1 : 0, 
-              transition: 'opacity 0.2s ease-in-out', 
-              position: 'absolute', 
-              top: 0, 
-              left: 0, 
-              right: 0, 
-              bottom: 0, 
-              pointerEvents: 'none',
-              zIndex: 99 // Set a z-index just below the graphs
-            }}
-          >
-            <GlobalCoordinateGrid gridSize={gridSize} showLabels={showGridLabels} />
+
+        {/* White board container - maximized size */}
+        <div className="flex-1 bg-white relative overflow-hidden min-h-0" id="grid-container">
+          {/* Global coordinate grid - taking full space */}
+          <div className="absolute inset-0 w-full h-full" style={{ zIndex: 1 }}>
+            {showGrid && <GlobalCoordinateGrid gridSize={50} showLabels={true} />}
           </div>
-          
-          {/* Graph Area */}
-          <div className="flex-1 p-4 relative">
-            <div className="relative w-full h-full">
-              {/* Graph Container */}
-              <div className="relative w-full h-full">
-                {graphs.length > 0 ? (
-                  graphs.map((graph, index) => (
-                    <DraggableGraph
-                      key={graph.id}
-                      data={graph.data}
-                      filename={graph.filename || graph.title || 'Graph'}
-                      position={graph.position}
-                      size={graph.size}
-                      rotation={graph.rotation}
-                      zIndex={graph.zIndex || 100 + index}
-                      onPositionChange={(x, y) => handlePositionUpdate(graph.id, x, y)}
-                      onSizeChange={(width, height) => handleSizeUpdate(graph.id, width, height)}
-                      onRotationChange={(rotation) => handleRotationUpdate(graph.id, rotation)}
-                      color={graph.color}
-                      onColorChange={(color) => handleColorChange(graph.id, color)}
-                      onRemove={() => handleRemoveGraph(graph.id)}
-                      isSettingsOpen={selectedGraphId === graph.id}
-                      onToggleSettings={() => {
-                        if (selectedGraphId === graph.id) {
-                          setSelectedGraphId(null);
-                          setShowSettings(false);
-                        } else {
-                          setSelectedGraphId(graph.id);
-                          setShowSettings(true);
-                          // Close data panel if different graph is selected for settings
-                          if (selectedDataGraphId !== graph.id) {
-                            setSelectedDataGraphId(null);
-                          }
-                          bringGraphToFront(graph.id);
-                        }
-                      }}
-                      domains={graph.domains}
-                      axisIntervals={graph.axisIntervals}
-                      quadrantMode={graph.quadrantMode}
-                      onDataPanelToggle={() => {
-                        if (selectedDataGraphId === graph.id) {
-                          setSelectedDataGraphId(null);
-                        } else {
-                          setSelectedDataGraphId(graph.id);
-                          // Close settings panel if different graph is selected for data
-                          if (selectedGraphId !== graph.id) {
-                            setSelectedGraphId(null);
-                          }
-                          bringGraphToFront(graph.id);
-                        }
-                      }}
-                    />
-                  ))
-                ) : (
-                  <div className="flex items-center justify-center h-full">
-                    <div className="text-center">
-                      <div className="bg-indigo-50 p-6 rounded-full inline-block mb-4 shadow-sm">
-                        <svg className="h-16 w-16 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                        </svg>
-                      </div>
-                      <h3 className="text-xl font-medium text-gray-900">No graphs yet</h3>
-                      <p className="text-gray-600 mt-2 max-w-md mx-auto">Upload a CSV file to get started with interactive data visualization</p>
-                    </div>
+
+          {/* Graphs container */}
+          <div className="relative h-full" style={{ zIndex: 2 }}>
+            {graphs.length > 0 ? (
+              graphs.map((graph) => (
+                <DraggableGraph
+                  key={graph.id}
+                  {...graph}
+                  zIndex={graph.zIndex || 100}
+                  onPositionChange={(x, y) => handlePositionUpdate(graph.id, x, y)}
+                  onSizeChange={(width, height) => handleSizeUpdate(graph.id, width, height)}
+                  onRotationChange={(rotation) => handleRotationUpdate(graph.id, rotation)}
+                  onColorChange={(color) => handleColorChange(graph.id, color)}
+                  onRemove={() => handleRemoveGraph(graph.id)}
+                  isSettingsOpen={selectedGraphId === graph.id}
+                  onToggleSettings={() => {
+                    if (selectedGraphId === graph.id) {
+                      setSelectedGraphId(null);
+                      setShowSettings(false);
+                    } else {
+                      setSelectedGraphId(graph.id);
+                      setShowSettings(true);
+                      if (selectedDataGraphId !== graph.id) {
+                        setSelectedDataGraphId(null);
+                      }
+                    }
+                  }}
+                  onDataPanelToggle={() => {
+                    if (selectedDataGraphId === graph.id) {
+                      setSelectedDataGraphId(null);
+                    } else {
+                      setSelectedDataGraphId(graph.id);
+                      if (selectedGraphId !== graph.id) {
+                        setSelectedGraphId(null);
+                      }
+                    }
+                  }}
+                />
+              ))
+            ) : (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center">
+                  <div className="bg-blue-50 p-6 rounded-full inline-block mb-4">
+                    <svg className="h-12 w-12 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
                   </div>
-                )}
+                  <h3 className="text-lg font-medium text-gray-900">No graphs yet</h3>
+                  <p className="text-gray-500 mt-1">Upload a CSV file to get started</p>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
-        
-        {/* Data Panel - Left side slide in */}
-        <div className={`fixed left-0 top-0 h-full w-80 bg-white border-r border-gray-200 shadow-2xl transform transition-transform duration-300 ease-in-out z-[1000] ${selectedDataGraphId ? 'translate-x-0' : '-translate-x-full'}`}>
-          {selectedDataGraph && (
-            <DataPanel 
-              graph={selectedDataGraph}
-              onDataUpdate={handleDataUpdate}
-              onClose={() => setSelectedDataGraphId(null)}
-            />
-          )}
-        </div>
-        
-        {/* Settings Panel - Right side slide in */}
-        <div className={`fixed right-0 top-0 h-full w-80 bg-white shadow-lg transition-transform duration-300 transform z-[1000] ${showSettings ? 'translate-x-0' : 'translate-x-full'}`}>
-          {showSettings && selectedGraph && (
-            <SettingsPanel 
-              graph={selectedGraph} 
-              onSettingsUpdate={handleSettingsUpdate}
-              onClose={handleSettingsClose}
-            />
-          )}
-        </div>
-      </main>
+      </div>
+
+      {/* Side panels */}
+      <div className={`fixed left-0 top-0 h-full w-80 bg-white border-r shadow-xl transform transition-transform duration-300 z-50 ${selectedDataGraphId ? 'translate-x-0' : '-translate-x-full'}`}>
+        {selectedDataGraph && (
+          <DataPanel 
+            graph={selectedDataGraph}
+            onDataUpdate={handleDataUpdate}
+            onClose={() => setSelectedDataGraphId(null)}
+          />
+        )}
+      </div>
       
-      <footer className="mt-6 text-center text-sm text-gray-600 py-3">
-        <p>&copy; {new Date().getFullYear()} CSV Graph Visualizer</p>
-      </footer>
+      <div className={`fixed right-0 top-0 h-full w-80 bg-white border-l shadow-xl transform transition-transform duration-300 z-50 ${showSettings ? 'translate-x-0' : 'translate-x-full'}`}>
+        {showSettings && selectedGraph && (
+          <SettingsPanel 
+            graph={selectedGraph} 
+            onSettingsUpdate={handleSettingsUpdate}
+            onClose={handleSettingsClose}
+          />
+        )}
+      </div>
     </div>
   );
 }

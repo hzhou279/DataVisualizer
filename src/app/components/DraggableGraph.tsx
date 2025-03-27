@@ -324,28 +324,18 @@ export default function DraggableGraph({
   }, [localRotation, rotationCenter, globalCoordinate]);
 
   // Style for the component
-  const style = useMemo(() => {
-    const posX = position.x + (globalCoordinate?.x || 0);
-    const posY = position.y + (globalCoordinate?.y || 0);
-    
-    return {
-      position: 'absolute' as const,
-      width: isMinimized ? '300px' : `${size.width}px`,
-      height: isMinimized ? '40px' : `${size.height}px`,
-      left: `${posX}px`,
-      top: `${posY}px`,
-      transform: transformStyle,
-      backgroundColor: 'white',
-      border: '1px solid #ddd',
-      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
-      borderRadius: '4px',
-      overflow: 'hidden',
-      zIndex: zIndex || 0,
-      transition: isMinimized ? 'width 0.2s ease, height 0.2s ease' : 'transform 0.3s ease-in-out',
-      display: 'flex',
-      flexDirection: 'column' as const,
-    };
-  }, [position, size, zIndex, isMinimized, transformStyle, globalCoordinate]);
+  const containerStyle = {
+    position: 'absolute' as const,
+    left: position.x,
+    top: position.y,
+    width: isMinimized ? 300 : size.width,
+    height: isMinimized ? 40 : size.height,
+    transform: `rotate(${localRotation}deg)`,
+    transformOrigin: 'center center',
+    zIndex: 100, // Set all graphs to same z-index
+    backgroundColor: 'transparent',
+    transition: isMinimized ? 'width 0.2s ease, height 0.2s ease' : 'transform 0.3s ease-in-out'
+  };
 
   // Function to handle rotation
   const handleRotate = (e: React.MouseEvent) => {
@@ -520,13 +510,13 @@ export default function DraggableGraph({
     <>
       <div 
         ref={containerRef}
-        style={style} 
+        style={containerStyle} 
         className="graph-container"
       >
-        <div className="bg-transparent border border-black rounded-lg shadow-lg h-full flex flex-col overflow-hidden">
-          {/* Header with drag handle */}
+        <div className="bg-transparent border border-black rounded-lg h-full flex flex-col overflow-hidden">
+          {/* Header with semi-transparent background */}
           <div 
-            className={`handle bg-blue-50 p-2 border-b border-gray-200 flex justify-between items-center cursor-move ${isMinimized ? 'rounded-lg' : ''}`}
+            className={`handle bg-white bg-opacity-80 p-2 border-b border-gray-200 flex justify-between items-center cursor-move ${isMinimized ? 'rounded-lg' : ''}`}
             onMouseDown={(e) => handleDrag(e, 'move')}
             onDoubleClick={() => {
               if (isMinimized) {
@@ -658,10 +648,10 @@ export default function DraggableGraph({
             </div>
           </div>
           
-          {/* Graph content */}
+          {/* Graph content with semi-transparent background */}
           {!isMinimized && (
             <div 
-              className="flex-1 p-2 relative flex flex-col" 
+              className="flex-1 p-2 relative flex flex-col bg-white bg-opacity-50" 
               style={{ 
                 minHeight: 0, 
                 height: "calc(100% - 32px)"  // Subtract header height to ensure proper sizing
@@ -938,7 +928,6 @@ export default function DraggableGraph({
   
   // Custom drag handler implementation
   function handleDrag(e: React.MouseEvent, direction: string) {
-    e.stopPropagation();
     e.preventDefault();
     
     // Don't start drag if we clicked on a button or input
@@ -948,29 +937,7 @@ export default function DraggableGraph({
         (e.target as HTMLElement).tagName === 'path') {
       return;
     }
-    
-    // Bring this graph to the top when starting to drag
-    const currentGraphs = document.querySelectorAll('.graph-container');
-    let maxZIndex = zIndex;
-    currentGraphs.forEach((graph) => {
-      const graphZIndex = parseInt(getComputedStyle(graph).zIndex);
-      if (graphZIndex > maxZIndex) {
-        maxZIndex = graphZIndex;
-      }
-    });
-    
-    // Only update if this isn't already the top graph
-    if (maxZIndex > zIndex) {
-      const graphElement = e.currentTarget.closest('.graph-container') as HTMLElement;
-      if (graphElement) {
-        graphElement.style.zIndex = (maxZIndex + 1).toString();
-      }
-    }
-    
-    setIsDragging(true);
-    // Show coordinate tooltip when dragging starts
-    setShowCoordinateTooltip(true);
-    
+
     const initialX = e.clientX;
     const initialY = e.clientY;
     const initialLeft = position.x;
@@ -978,57 +945,14 @@ export default function DraggableGraph({
     const initialWidth = size.width;
     const initialHeight = size.height;
     
-    // Create a throttled onMouseMove function
-    let lastMoveTime = Date.now();
-    let throttleTimer: NodeJS.Timeout | null = null;
-    
+    // Handle mouse move
     function onMouseMove(moveEvent: MouseEvent) {
-      const now = Date.now();
-      const elapsed = now - lastMoveTime;
-      
-      // Throttle move events for better performance
-      if (elapsed < 16) {
-        if (!throttleTimer) {
-          throttleTimer = setTimeout(() => {
-            throttleTimer = null;
-            onMouseMove(moveEvent);
-          }, 16 - elapsed);
-        }
-        return;
-      }
-      
-      lastMoveTime = now;
-      
       const dx = moveEvent.clientX - initialX;
       const dy = moveEvent.clientY - initialY;
       
       // If just moving (not resizing)
       if (direction === 'move') {
-        // Calculate new position considering global coordinates
-        let newX = initialLeft + dx;
-        let newY = initialTop + dy;
-        
-        // Calculate position with global coordinate offset for bounds checking
-        const actualX = newX + (globalCoordinate?.x || 0);
-        const actualY = newY + (globalCoordinate?.y || 0);
-        
-        // Update current coordinates for tooltip
-        setCurrentCoordinates({ x: actualX, y: actualY });
-        
-        // Ensure the graph remains within the window boundaries
-        const maxX = window.innerWidth - size.width;
-        const maxY = window.innerHeight - size.height;
-        
-        // Apply boundary constraints
-        if (actualX < 0) newX = -globalCoordinate.x;
-        if (actualY < 0) newY = -globalCoordinate.y;
-        if (actualX > maxX) newX = maxX - globalCoordinate.x;
-        if (actualY > maxY) newY = maxY - globalCoordinate.y;
-        
-        // Update only if position has changed significantly
-        if (Math.abs(newX - position.x) > 1 || Math.abs(newY - position.y) > 1) {
-          onPositionChange(newX, newY);
-        }
+        onPositionChange(initialLeft + dx, initialTop + dy);
         return;
       }
       
@@ -1148,9 +1072,6 @@ export default function DraggableGraph({
     function onMouseUp() {
       document.removeEventListener('mousemove', onMouseMove);
       document.removeEventListener('mouseup', onMouseUp);
-      setIsDragging(false);
-      // Hide coordinate tooltip when dragging ends
-      setShowCoordinateTooltip(false);
     }
     
     // Add event listeners

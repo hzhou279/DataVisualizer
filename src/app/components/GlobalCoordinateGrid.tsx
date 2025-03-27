@@ -1,135 +1,249 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 
 interface GlobalCoordinateGridProps {
-  gridSize: number;
-  showLabels: boolean;
+  gridSize?: number;
+  showLabels?: boolean;
 }
 
 export default function GlobalCoordinateGrid({ gridSize = 50, showLabels = true }: GlobalCoordinateGridProps) {
-  const [dimensions, setDimensions] = useState({
-    width: typeof window !== 'undefined' ? window.innerWidth : 1000,
-    height: typeof window !== 'undefined' ? window.innerHeight : 800,
-  });
+  const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
+  
+  // Add padding for labels
+  const PADDING = {
+    LEFT: 40,   // Space for y-axis labels
+    TOP: 30,    // Space for x-axis labels
+    RIGHT: 20,  // Small right padding
+    BOTTOM: 20  // Small bottom padding
+  };
 
-  useEffect(() => {
-    const handleResize = () => {
+  // Update dimensions when container size changes
+  const updateDimensions = useCallback(() => {
+    const container = document.getElementById('grid-container');
+    if (container) {
+      const rect = container.getBoundingClientRect();
       setDimensions({
-        width: window.innerWidth,
-        height: window.innerHeight,
+        width: rect.width,
+        height: rect.height
       });
-    };
-
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+      console.log('Grid container dimensions:', rect.width, rect.height); // Debug log
+    }
   }, []);
 
-  // Generate grid lines
-  const generateGridLines = () => {
-    const lines = [];
-    const numXLines = Math.ceil(dimensions.width / gridSize);
-    const numYLines = Math.ceil(dimensions.height / gridSize);
-
-    // Vertical lines
-    for (let i = 0; i <= numXLines; i++) {
-      lines.push(
-        <line
-          key={`v-${i}`}
-          x1={i * gridSize}
-          y1={0}
-          x2={i * gridSize}
-          y2="100%"
-          strokeWidth={1}
-          stroke="rgba(107, 114, 128, 0.2)"
-        />
-      );
+  useEffect(() => {
+    // Initial update
+    updateDimensions();
+    
+    // Create a ResizeObserver for more reliable size updates
+    const container = document.getElementById('grid-container');
+    if (container) {
+      const resizeObserver = new ResizeObserver(() => {
+        updateDimensions();
+      });
+      
+      resizeObserver.observe(container);
+      
+      // Cleanup
+      return () => {
+        resizeObserver.disconnect();
+      };
     }
+    
+    // Fallback to window resize event
+    window.addEventListener('resize', updateDimensions);
+    return () => window.removeEventListener('resize', updateDimensions);
+  }, [updateDimensions]);
 
-    // Horizontal lines
-    for (let i = 0; i <= numYLines; i++) {
-      lines.push(
-        <line
-          key={`h-${i}`}
-          x1={0}
-          y1={i * gridSize}
-          x2="100%"
-          y2={i * gridSize}
-          strokeWidth={1}
-          stroke="rgba(107, 114, 128, 0.2)"
-        />
-      );
-    }
-
-    return lines;
-  };
-
-  // Generate intersection points and labels
-  const generateIntersectionPoints = () => {
-    const points = [];
-    const numXPoints = Math.ceil(dimensions.width / (gridSize * 5));
-    const numYPoints = Math.ceil(dimensions.height / (gridSize * 5));
-
-    for (let x = 1; x <= numXPoints; x++) {
-      for (let y = 1; y <= numYPoints; y++) {
-        const xPos = x * gridSize * 5;
-        const yPos = y * gridSize * 5;
-
-        // Add point marker
-        points.push(
-          <circle
-            key={`point-${x}-${y}`}
-            cx={xPos}
-            cy={yPos}
-            r={2}
-            fill="rgba(79, 70, 229, 0.6)"
+  // Calculate grid lines and markers
+  const generateGridMarkers = () => {
+    const xMarkers = [];
+    const yMarkers = [];
+    
+    // Calculate number of markers needed
+    const xCount = Math.floor((dimensions.width - PADDING.LEFT - PADDING.RIGHT) / gridSize);
+    const yCount = Math.floor((dimensions.height - PADDING.TOP - PADDING.BOTTOM) / gridSize);
+    
+    // Generate X-axis markers (every 100px)
+    for (let i = 0; i <= xCount; i += 2) {
+      const x = i * gridSize + PADDING.LEFT; // Offset by left padding
+      xMarkers.push(
+        <g key={`x-${x}`}>
+          <line 
+            x1={x} 
+            y1={PADDING.TOP} 
+            x2={x} 
+            y2={PADDING.TOP + 10} 
+            stroke="rgba(0,0,0,0.5)" 
+            strokeWidth={1}
           />
-        );
-
-        // Add coordinate label if showLabels is true
-        if (showLabels) {
-          points.push(
-            <text
-              key={`label-${x}-${y}`}
-              x={xPos + 8}
-              y={yPos - 8}
-              fontSize="11"
-              fill="rgba(79, 70, 229, 0.8)"
-              className="coordinate-label"
-            >
-              ({xPos}, {yPos})
-            </text>
-          );
-        }
-      }
+          <text 
+            x={x} 
+            y={PADDING.TOP - 10} 
+            textAnchor="middle" 
+            fill="rgba(0,0,0,0.6)"
+            fontSize={12}
+            className="select-none"
+          >
+            {i * gridSize}
+          </text>
+        </g>
+      );
+    }
+    
+    // Generate Y-axis markers (every 100px)
+    for (let i = 0; i <= yCount; i += 2) {
+      const y = i * gridSize + PADDING.TOP; // Offset by top padding
+      yMarkers.push(
+        <g key={`y-${y}`}>
+          <line 
+            x1={PADDING.LEFT - 10} 
+            y1={y} 
+            x2={PADDING.LEFT} 
+            y2={y} 
+            stroke="rgba(0,0,0,0.5)" 
+            strokeWidth={1}
+          />
+          <text 
+            x={PADDING.LEFT - 15} 
+            y={y + 4} 
+            textAnchor="end" 
+            fill="rgba(0,0,0,0.6)"
+            fontSize={12}
+            className="select-none"
+          >
+            {i * gridSize}
+          </text>
+        </g>
+      );
     }
 
-    return points;
+    return { xMarkers, yMarkers };
   };
+
+  const { xMarkers, yMarkers } = generateGridMarkers();
 
   return (
-    <div className="absolute inset-0 overflow-hidden">
+    <div className="absolute inset-0 w-full h-full pointer-events-none" style={{ overflow: 'hidden' }}>
       <svg 
         width="100%" 
         height="100%" 
-        className="absolute top-0 left-0"
-        style={{ 
-          strokeWidth: '1px',
-          vectorEffect: 'non-scaling-stroke'
-        }}
+        className="absolute inset-0"
+        style={{ minWidth: '100%', minHeight: '100%' }}
       >
-        {/* Grid lines */}
-        {generateGridLines()}
-        
-        {/* Intersection points and labels */}
-        {generateIntersectionPoints()}
+        <defs>
+          <pattern 
+            id="grid" 
+            width={gridSize} 
+            height={gridSize} 
+            patternUnits="userSpaceOnUse"
+            x={PADDING.LEFT}
+            y={PADDING.TOP}
+          >
+            {/* Main grid lines */}
+            <line 
+              x1="0" 
+              y1="0" 
+              x2={gridSize} 
+              y2="0" 
+              stroke="rgba(0,0,0,0.1)" 
+              strokeWidth={0.5}
+            />
+            <line 
+              x1="0" 
+              y1="0" 
+              x2="0" 
+              y2={gridSize} 
+              stroke="rgba(0,0,0,0.1)" 
+              strokeWidth={0.5}
+            />
+            {/* Dotted lines for better visibility */}
+            <line
+              x1="0"
+              y1={gridSize/2}
+              x2={gridSize}
+              y2={gridSize/2}
+              stroke="rgba(0,0,0,0.05)"
+              strokeWidth={0.5}
+              strokeDasharray="1,3"
+            />
+            <line
+              x1={gridSize/2}
+              y1="0"
+              x2={gridSize/2}
+              y2={gridSize}
+              stroke="rgba(0,0,0,0.05)"
+              strokeWidth={0.5}
+              strokeDasharray="1,3"
+            />
+          </pattern>
+        </defs>
+
+        {/* Background grid with padding */}
+        <rect 
+          x={PADDING.LEFT} 
+          y={PADDING.TOP} 
+          width={dimensions.width - PADDING.LEFT - PADDING.RIGHT} 
+          height={dimensions.height - PADDING.TOP - PADDING.BOTTOM} 
+          fill="url(#grid)" 
+          stroke="rgba(0,0,0,0.1)"
+          strokeWidth={0.5}
+        />
+
+        {/* Draw explicit grid lines for better visibility */}
+        <g>
+          {/* Vertical grid lines */}
+          {Array.from({ length: Math.floor((dimensions.width - PADDING.LEFT - PADDING.RIGHT) / gridSize) + 1 }).map((_, i) => (
+            <line
+              key={`v-${i}`}
+              x1={PADDING.LEFT + i * gridSize}
+              y1={PADDING.TOP}
+              x2={PADDING.LEFT + i * gridSize}
+              y2={dimensions.height - PADDING.BOTTOM}
+              stroke="rgba(0,0,0,0.1)"
+              strokeWidth={0.5}
+            />
+          ))}
+          {/* Horizontal grid lines */}
+          {Array.from({ length: Math.floor((dimensions.height - PADDING.TOP - PADDING.BOTTOM) / gridSize) + 1 }).map((_, i) => (
+            <line
+              key={`h-${i}`}
+              x1={PADDING.LEFT}
+              y1={PADDING.TOP + i * gridSize}
+              x2={dimensions.width - PADDING.RIGHT}
+              y2={PADDING.TOP + i * gridSize}
+              stroke="rgba(0,0,0,0.1)"
+              strokeWidth={0.5}
+            />
+          ))}
+        </g>
+
+        {/* Main axes with stronger visibility */}
+        <line 
+          x1={PADDING.LEFT} 
+          y1={PADDING.TOP} 
+          x2={dimensions.width - PADDING.RIGHT} 
+          y2={PADDING.TOP} 
+          stroke="rgba(0,0,0,0.3)" 
+          strokeWidth={1} 
+        />
+        <line 
+          x1={PADDING.LEFT} 
+          y1={PADDING.TOP} 
+          x2={PADDING.LEFT} 
+          y2={dimensions.height - PADDING.BOTTOM} 
+          stroke="rgba(0,0,0,0.3)" 
+          strokeWidth={1} 
+        />
+
+        {/* Coordinate markers */}
+        {showLabels && (
+          <>
+            {/* X-axis markers */}
+            {xMarkers}
+            {/* Y-axis markers */}
+            {yMarkers}
+          </>
+        )}
       </svg>
-      
-      {/* Info tooltip */}
-      <div 
-        className="absolute bottom-2 right-2 bg-white/90 px-3 py-1.5 rounded-md text-xs text-gray-600 border border-gray-200 shadow-sm"
-        style={{ zIndex: 1000, pointerEvents: 'auto' }}
-      >
-        Grid Size: {gridSize}px | Position coordinates shown at major intersections
-      </div>
     </div>
   );
 } 
