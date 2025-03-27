@@ -79,6 +79,74 @@ export default function DraggableGraph({
   // Reference to the container element
   const containerRef = React.useRef<HTMLDivElement>(null);
 
+  // Handle window resize with a completely different approach
+  useEffect(() => {
+    if (!isMinimized && data && data.length > 0) {
+      // Create reference to initial window dimensions and graph proportions
+      let initialWindowWidth = window.innerWidth;
+      let initialWindowHeight = window.innerHeight;
+      
+      // Calculate initial ratio of graph to window
+      const initialWidthRatio = size.width / initialWindowWidth;
+      const initialHeightRatio = size.height / initialWindowHeight;
+      
+      console.log(`Initial graph to window ratio: Width=${initialWidthRatio.toFixed(2)}, Height=${initialHeightRatio.toFixed(2)}`);
+      
+      // Create a resize handler that enforces proportional resizing
+      const handleWindowResize = () => {
+        // Get new window dimensions
+        const newWindowWidth = window.innerWidth;
+        const newWindowHeight = window.innerHeight;
+        
+        // Skip if no change in window dimensions
+        if (newWindowWidth === initialWindowWidth && newWindowHeight === initialWindowHeight) {
+          return;
+        }
+        
+        console.log(`Window resized: ${initialWindowWidth}x${initialWindowHeight} -> ${newWindowWidth}x${newWindowHeight}`);
+        
+        // Calculate proportional size based on window dimensions
+        // This ensures the graph changes size proportionally with the window
+        let newWidth = Math.round(newWindowWidth * initialWidthRatio);
+        let newHeight = Math.round(newWindowHeight * initialHeightRatio);
+        
+        // Apply min/max constraints
+        const minWidth = 250;
+        const minHeight = 200;
+        const maxWidth = Math.min(800, newWindowWidth * 0.7);
+        const maxHeight = Math.min(600, newWindowHeight * 0.7);
+        
+        newWidth = Math.min(Math.max(newWidth, minWidth), maxWidth);
+        newHeight = Math.min(Math.max(newHeight, minHeight), maxHeight);
+        
+        console.log(`Resizing graph: ${size.width}x${size.height} -> ${newWidth}x${newHeight}`);
+        
+        // Update size if width or height actually changed
+        if (newWidth !== size.width || newHeight !== size.height) {
+          onSizeChange(newWidth, newHeight);
+        }
+        
+        // Update reference to current window dimensions
+        initialWindowWidth = newWindowWidth;
+        initialWindowHeight = newWindowHeight;
+      };
+      
+      // Handle resize
+      window.addEventListener('resize', handleWindowResize);
+      
+      return () => {
+        window.removeEventListener('resize', handleWindowResize);
+      };
+    }
+  }, [isMinimized, data, size.width, size.height, onSizeChange]);
+  
+  // Handle click action for the settings button
+  const handleSettingsButtonClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    // No need to track internal state, just call the parent toggle function
+    onToggleSettings();
+  };
+
   // Process data for rendering all points efficiently
   const processedData = useMemo(() => {
     // Return all data points regardless of size
@@ -147,58 +215,6 @@ export default function DraggableGraph({
     setScaledDomains(calculatedDomains);
   }, [calculatedDomains]);
 
-  // Handle window resize to adapt graph size
-  useEffect(() => {
-    // Function to calculate and apply appropriate graph dimensions
-    const calculateAndApplyDimensions = () => {
-      if (!isMinimized && data && data.length > 0) {
-        const minWidth = 400;
-        const minHeight = 300;
-        const maxWidth = Math.min(800, window.innerWidth * 0.7);
-        const maxHeight = Math.min(600, window.innerHeight * 0.7);
-        
-        // Check if current dimensions need adjustment
-        let newWidth = size.width;
-        let newHeight = size.height;
-        let needsUpdate = false;
-        
-        // Check width constraints
-        if (size.width > maxWidth) {
-          newWidth = maxWidth;
-          needsUpdate = true;
-        } else if (size.width < minWidth) {
-          newWidth = minWidth;
-          needsUpdate = true;
-        }
-        
-        // Check height constraints
-        if (size.height > maxHeight) {
-          newHeight = maxHeight;
-          needsUpdate = true;
-        } else if (size.height < minHeight) {
-          newHeight = minHeight;
-          needsUpdate = true;
-        }
-        
-        // Only update if dimensions need to change
-        if (needsUpdate) {
-          onSizeChange(newWidth, newHeight);
-        }
-      }
-    };
-    
-    // Apply dimensions on mount
-    calculateAndApplyDimensions();
-    
-    // Set up window resize listener
-    const handleResize = () => {
-      calculateAndApplyDimensions();
-    };
-    
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [isMinimized, data, size.width, size.height, onSizeChange]);
-
   // Sync local rotation with prop when it changes externally
   useEffect(() => {
     setLocalRotation(rotation);
@@ -237,14 +253,6 @@ export default function DraggableGraph({
       }
     }
   }, [domains]);
-
-  // Sync settings open state with UI
-  useEffect(() => {
-    // When settings panel is closed, reset the button state
-    if (!isSettingsOpen) {
-      // Reset any local state related to settings if needed
-    }
-  }, [isSettingsOpen]);
 
   const handleRotationInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setRotationValue(e.target.value);
@@ -401,6 +409,28 @@ export default function DraggableGraph({
     );
   }, [data?.length, renderStrategy]);
 
+  // Force sync settings button state with isSettingsOpen prop
+  useEffect(() => {
+    // Find the settings button in the DOM
+    const container = containerRef.current;
+    if (!container) return;
+    
+    const settingsButton = container.querySelector('[data-active]') as HTMLButtonElement;
+    if (!settingsButton) return;
+    
+    // Manually update the button's state
+    settingsButton.dataset.active = isSettingsOpen ? 'true' : 'false';
+    
+    // Update button styling
+    if (isSettingsOpen) {
+      settingsButton.classList.remove('bg-white', 'text-gray-500', 'hover:text-gray-700', 'hover:bg-gray-100');
+      settingsButton.classList.add('bg-blue-500', 'text-white', 'hover:bg-blue-600', 'shadow-sm');
+    } else {
+      settingsButton.classList.remove('bg-blue-500', 'text-white', 'hover:bg-blue-600', 'shadow-sm');
+      settingsButton.classList.add('bg-white', 'text-gray-500', 'hover:text-gray-700', 'hover:bg-gray-100');
+    }
+  }, [isSettingsOpen]);
+
   return (
     <>
       <div 
@@ -502,16 +532,14 @@ export default function DraggableGraph({
               
               {/* Always show the settings and close buttons, even when minimized */}
               <button 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onToggleSettings();
-                }}
-                className={`p-1 rounded transition-colors duration-200 ${
+                onClick={handleSettingsButtonClick}
+                data-active={isSettingsOpen ? "true" : "false"}
+                className={`p-1 rounded transition-colors duration-100 ${
                   isSettingsOpen 
-                    ? 'bg-blue-100 text-blue-700 hover:bg-blue-200' 
+                    ? 'bg-blue-500 text-white hover:bg-blue-600 shadow-sm' 
                     : 'bg-white text-gray-500 hover:text-gray-700 hover:bg-gray-100'
                 }`}
-                title="Settings"
+                title={isSettingsOpen ? "Close Settings" : "Open Settings"}
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />

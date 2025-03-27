@@ -229,6 +229,7 @@ export default function Home() {
 
   const handleSettingsClose = () => {
     setShowSettings(false);
+    setSelectedGraphId(null);
   };
 
   const handleDataPanelToggle = (id: string) => {
@@ -244,6 +245,9 @@ export default function Home() {
       }
       return graph;
     }));
+    
+    // Reset selected graph ID after applying settings
+    setSelectedGraphId(null);
   };
 
   const selectedGraph = graphs.find(graph => graph.id === selectedGraphId);
