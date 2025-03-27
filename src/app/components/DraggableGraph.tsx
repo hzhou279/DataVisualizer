@@ -705,6 +705,7 @@ export default function DraggableGraph({
                 <XAxis 
                   type="number" 
                   dataKey="x" 
+                  xAxisId={0}
                   domain={
                     quadrantMode === 'all' 
                       ? [
@@ -724,49 +725,32 @@ export default function DraggableGraph({
                     const min = scaledDomains.xMin ?? 0;
                     const max = scaledDomains.xMax ?? 100;
                     
-                    console.log(`DEBUG X-Axis - Domain: [${min}, ${max}]`);
+                    // Fixed number of intervals for consistent spacing
+                    const fixedTickCount = 6; // Will create 5 equal spaces
                     
-                    // Calculate a nice step size based on the range
-                    const range = max - min;
+                    // Calculate step size based on fixed count
+                    const rawStepSize = (max - min) / (fixedTickCount - 1);
                     
-                    // Determine ideal tick count (5-7 ticks is usually good)
-                    const targetTickCount = 5;
+                    // Round to a nice number
+                    const magnitude = Math.pow(10, Math.floor(Math.log10(rawStepSize)));
+                    let stepSize;
                     
-                    // Calculate initial step size
-                    let stepSize = range / targetTickCount;
+                    // Choose appropriate step size that's a nice round number
+                    const normalizedStep = rawStepSize / magnitude;
+                    if (normalizedStep < 1.5) stepSize = magnitude;
+                    else if (normalizedStep < 3) stepSize = 2 * magnitude;
+                    else if (normalizedStep < 7) stepSize = 5 * magnitude;
+                    else stepSize = 10 * magnitude;
                     
-                    // Round to a nice number (1, 2, 5, 10, 20, 50, etc.)
-                    const magnitude = Math.pow(10, Math.floor(Math.log10(stepSize)));
-                    const normalizedStep = stepSize / magnitude;
+                    // Ensure we always include min and max in our ticks
+                    const adjustedMin = Math.floor(min / stepSize) * stepSize;
+                    const adjustedMax = Math.ceil(max / stepSize) * stepSize;
                     
-                    console.log(`DEBUG X-Axis - Range: ${range}, Initial Step: ${stepSize}, Magnitude: ${magnitude}, NormalizedStep: ${normalizedStep}`);
-                    
-                    // Choose a nice step size
-                    if (normalizedStep < 1.5) {
-                      stepSize = magnitude;
-                    } else if (normalizedStep < 3) {
-                      stepSize = 2 * magnitude;
-                    } else if (normalizedStep < 7) {
-                      stepSize = 5 * magnitude;
-                    } else {
-                      stepSize = 10 * magnitude;
-                    }
-                    
-                    // Calculate starting point (round down to nice multiple of step size)
-                    let start = Math.floor(min / stepSize) * stepSize;
-                    
-                    console.log(`DEBUG X-Axis - Final Step: ${stepSize}, Start: ${start}`);
-                    
-                    // Generate ticks
+                    // Generate ticks at even intervals
                     const ticks = [];
-                    let current = start;
-                    
-                    while (current <= max) {
-                      ticks.push(current);
-                      current += stepSize;
+                    for (let i = adjustedMin; i <= adjustedMax + (stepSize / 2); i += stepSize) {
+                      ticks.push(parseFloat(i.toFixed(10))); // Fix floating point precision issues
                     }
-                    
-                    console.log(`DEBUG X-Axis - Generated Ticks: ${JSON.stringify(ticks)}`);
                     
                     return ticks;
                   })()}
@@ -788,7 +772,8 @@ export default function DraggableGraph({
                 />
                 <YAxis 
                   type="number"
-                  dataKey="y" 
+                  dataKey="y"
+                  yAxisId={0}
                   domain={
                     quadrantMode === 'all' 
                       ? [
@@ -808,49 +793,32 @@ export default function DraggableGraph({
                     const min = scaledDomains.yMin ?? 0;
                     const max = scaledDomains.yMax ?? 100;
                     
-                    console.log(`DEBUG Y-Axis - Domain: [${min}, ${max}]`);
+                    // Fixed number of intervals for consistent spacing
+                    const fixedTickCount = 6; // Will create 5 equal spaces
                     
-                    // Calculate a nice step size based on the range
-                    const range = max - min;
+                    // Calculate step size based on fixed count
+                    const rawStepSize = (max - min) / (fixedTickCount - 1);
                     
-                    // Determine ideal tick count (5-7 ticks is usually good)
-                    const targetTickCount = 5;
+                    // Round to a nice number
+                    const magnitude = Math.pow(10, Math.floor(Math.log10(rawStepSize)));
+                    let stepSize;
                     
-                    // Calculate initial step size
-                    let stepSize = range / targetTickCount;
+                    // Choose appropriate step size that's a nice round number
+                    const normalizedStep = rawStepSize / magnitude;
+                    if (normalizedStep < 1.5) stepSize = magnitude;
+                    else if (normalizedStep < 3) stepSize = 2 * magnitude;
+                    else if (normalizedStep < 7) stepSize = 5 * magnitude;
+                    else stepSize = 10 * magnitude;
                     
-                    // Round to a nice number (1, 2, 5, 10, 20, 50, etc.)
-                    const magnitude = Math.pow(10, Math.floor(Math.log10(stepSize)));
-                    const normalizedStep = stepSize / magnitude;
+                    // Ensure we always include min and max in our ticks
+                    const adjustedMin = Math.floor(min / stepSize) * stepSize;
+                    const adjustedMax = Math.ceil(max / stepSize) * stepSize;
                     
-                    console.log(`DEBUG Y-Axis - Range: ${range}, Initial Step: ${stepSize}, Magnitude: ${magnitude}, NormalizedStep: ${normalizedStep}`);
-                    
-                    // Choose a nice step size
-                    if (normalizedStep < 1.5) {
-                      stepSize = magnitude;
-                    } else if (normalizedStep < 3) {
-                      stepSize = 2 * magnitude;
-                    } else if (normalizedStep < 7) {
-                      stepSize = 5 * magnitude;
-                    } else {
-                      stepSize = 10 * magnitude;
-                    }
-                    
-                    // Calculate starting point (round down to nice multiple of step size)
-                    let start = Math.floor(min / stepSize) * stepSize;
-                    
-                    console.log(`DEBUG Y-Axis - Final Step: ${stepSize}, Start: ${start}`);
-                    
-                    // Generate ticks
+                    // Generate ticks at even intervals
                     const ticks = [];
-                    let current = start;
-                    
-                    while (current <= max) {
-                      ticks.push(current);
-                      current += stepSize;
+                    for (let i = adjustedMin; i <= adjustedMax + (stepSize / 2); i += stepSize) {
+                      ticks.push(parseFloat(i.toFixed(10))); // Fix floating point precision issues
                     }
-                    
-                    console.log(`DEBUG Y-Axis - Generated Ticks: ${JSON.stringify(ticks)}`);
                     
                     return ticks;
                   })()}
