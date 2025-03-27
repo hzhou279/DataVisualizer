@@ -231,15 +231,19 @@ export default function DraggableGraph({
     
     // Use provided domains or calculate from data
     const domainValues = {
-      xMin: localDomains.xMin !== undefined ? localDomains.xMin : (quadrantMode === 'all' ? Math.min(dataMin.x, 0) : 0),
+      xMin: localDomains.xMin !== undefined ? localDomains.xMin : (quadrantMode === 'all' ? Math.min(dataMin.x, 0) : (dataMin.x < 0 ? dataMin.x : 0)),
       xMax: localDomains.xMax !== undefined ? localDomains.xMax : dataMax.x,
-      yMin: localDomains.yMin !== undefined ? localDomains.yMin : (quadrantMode === 'all' ? Math.min(dataMin.y, 0) : 0),
+      yMin: localDomains.yMin !== undefined ? localDomains.yMin : (quadrantMode === 'all' ? Math.min(dataMin.y, 0) : (dataMin.y < 0 ? dataMin.y : 0)),
       yMax: localDomains.yMax !== undefined ? localDomains.yMax : dataMax.y
     };
     
-    // Add small padding to ensure points don't sit on the edge
-    const xPadding = (domainValues.xMax - domainValues.xMin) * 0.05;
-    const yPadding = (domainValues.yMax - domainValues.yMin) * 0.05;
+    // Calculate data ranges to determine appropriate padding
+    const xRange = domainValues.xMax - domainValues.xMin;
+    const yRange = domainValues.yMax - domainValues.yMin;
+    
+    // Add small padding to ensure points don't sit on the edge (5-10% padding depending on range)
+    const xPadding = xRange * 0.05;
+    const yPadding = yRange * 0.05;
     
     return {
       xMin: domainValues.xMin - xPadding,
@@ -549,7 +553,7 @@ export default function DraggableGraph({
               </svg>
             </div>
             <h3 className="font-medium text-gray-800 truncate text-sm">
-              {filename || 'Graph'} {!isMinimized && `(${localRotation.toFixed(1)}°)`}
+              {filename || 'Data Graph'} {!isMinimized && `(${localRotation.toFixed(1)}°)`}
             </h3>
           </div>
           
@@ -680,7 +684,7 @@ export default function DraggableGraph({
               }}
             >
               <ScatterChart 
-                margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
+                margin={{ top: 10, right: 10, bottom: 10, left: 10 }}
                 style={{ background: "transparent" }} // Make chart background transparent
               >
                 {/* Conditionally render grid based on data size */}
@@ -690,6 +694,20 @@ export default function DraggableGraph({
                     horizontal={true}
                     vertical={true}
                     strokeDasharray="0"
+                    horizontalPoints={[0.2, 0.4, 0.6, 0.8].map(
+                      factor => {
+                        const yMin = scaledDomains.yMin ?? 0;
+                        const yMax = scaledDomains.yMax ?? 100;
+                        return yMin + (yMax - yMin) * factor;
+                      }
+                    )}
+                    verticalPoints={[0.2, 0.4, 0.6, 0.8].map(
+                      factor => {
+                        const xMin = scaledDomains.xMin ?? 0;
+                        const xMax = scaledDomains.xMax ?? 100;
+                        return xMin + (xMax - xMin) * factor;
+                      }
+                    )}
                   />
                 ) : data.length <= 1000 ? (
                   <CartesianGrid 
@@ -697,7 +715,6 @@ export default function DraggableGraph({
                     horizontal={true}
                     vertical={true}
                     strokeDasharray="0"
-                    // Five equal intervals (matching the axis ticks)
                     horizontalPoints={[0.2, 0.4, 0.6, 0.8].map(
                       factor => {
                         const yMin = scaledDomains.yMin ?? 0;
@@ -720,7 +737,6 @@ export default function DraggableGraph({
                     vertical={true}
                     strokeDasharray="0"
                     strokeWidth={1}
-                    // Five equal intervals (matching the axis ticks)
                     horizontalPoints={[0.2, 0.4, 0.6, 0.8].map(
                       factor => {
                         const yMin = scaledDomains.yMin ?? 0;
@@ -778,7 +794,7 @@ export default function DraggableGraph({
                   }}
                 />
                 <YAxis 
-                  type="number" 
+                  type="number"
                   dataKey="y" 
                   domain={
                     quadrantMode === 'all' 
@@ -804,7 +820,6 @@ export default function DraggableGraph({
                   padding={{ top: 0, bottom: 0 }}
                   axisLine={{ stroke: '#000', strokeWidth: 1.5 }}
                   scale="linear"
-                  // Remove interval specification to avoid conflict with ticks
                   // Reduce font size for better performance with large datasets
                   tick={{ fontSize: data && data.length > 1000 ? 10 : 12 }}
                   // Format ticks to avoid long decimal values
@@ -1057,9 +1072,9 @@ export default function DraggableGraph({
         
         // Use provided domains or calculate from data
         const domainValues = {
-          xMin: localDomains.xMin !== undefined ? localDomains.xMin : (quadrantMode === 'all' ? Math.min(dataMin.x, 0) : 0),
+          xMin: localDomains.xMin !== undefined ? localDomains.xMin : (quadrantMode === 'all' ? Math.min(dataMin.x, 0) : (dataMin.x < 0 ? dataMin.x : 0)),
           xMax: localDomains.xMax !== undefined ? localDomains.xMax : dataMax.x,
-          yMin: localDomains.yMin !== undefined ? localDomains.yMin : (quadrantMode === 'all' ? Math.min(dataMin.y, 0) : 0),
+          yMin: localDomains.yMin !== undefined ? localDomains.yMin : (quadrantMode === 'all' ? Math.min(dataMin.y, 0) : (dataMin.y < 0 ? dataMin.y : 0)),
           yMax: localDomains.yMax !== undefined ? localDomains.yMax : dataMax.y
         };
         

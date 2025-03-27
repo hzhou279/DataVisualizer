@@ -342,6 +342,7 @@ export default function Home() {
                 <DraggableGraph
                   key={graph.id}
                   {...graph}
+                  filename={graph.title}
                   zIndex={graph.zIndex || 100}
                   onPositionChange={(x, y) => handlePositionUpdate(graph.id, x, y)}
                   onSizeChange={(width, height) => handleSizeUpdate(graph.id, width, height)}
