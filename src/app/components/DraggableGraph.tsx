@@ -481,7 +481,7 @@ export default function DraggableGraph({
         <div className="bg-transparent border border-black rounded-lg shadow-lg h-full flex flex-col overflow-hidden">
           {/* Header with drag handle */}
           <div 
-            className="handle bg-blue-50 p-2 border-b border-gray-200 flex justify-between items-center cursor-move"
+            className={`handle bg-blue-50 p-2 border-b border-gray-200 flex justify-between items-center cursor-move ${isMinimized ? 'rounded-lg' : ''}`}
             onMouseDown={(e) => handleDrag(e, 'move')}
             onDoubleClick={() => {
               if (isMinimized) {
@@ -490,7 +490,7 @@ export default function DraggableGraph({
             }}
           >
             {/* Drag handle area */}
-            <div className="flex-1 h-full flex items-center mr-2">
+            <div className={`flex-1 h-full flex items-center ${isMinimized ? 'mr-1' : 'mr-2'}`}>
               <div className="mr-2 text-gray-400 hover:text-gray-600">
                 <svg 
                   className="w-4 h-4" 
@@ -507,58 +507,61 @@ export default function DraggableGraph({
                 </svg>
               </div>
               <h3 className="font-medium text-gray-800 truncate text-sm">
-                {filename || 'Graph'} ({localRotation.toFixed(1)}°)
+                {filename || 'Graph'} {!isMinimized && `(${localRotation.toFixed(1)}°)`}
               </h3>
             </div>
             
             {/* Controls */}
-            <div className="flex space-x-1 z-10">
+            <div className={`flex ${isMinimized ? 'space-x-0.5' : 'space-x-1'} z-10`}>
+              {/* Rotation control - only visible when not minimized */}
               {!isMinimized && (
-                <>
-                  <div 
-                    className="relative w-8 h-8 cursor-grab active:cursor-grabbing rounded hover:bg-blue-100 flex items-center justify-center"
-                    onMouseDown={handleRotate}
-                    title="Drag to rotate"
+                <div 
+                  className="relative w-8 h-8 cursor-grab active:cursor-grabbing rounded hover:bg-blue-100 flex items-center justify-center"
+                  onMouseDown={handleRotate}
+                  title="Drag to rotate"
+                >
+                  <svg 
+                    className="w-5 h-5 text-blue-500 hover:text-blue-600 transition-colors"
+                    fill="none" 
+                    viewBox="0 0 24 24" 
+                    stroke="currentColor"
                   >
-                    <svg 
-                      className="w-5 h-5 text-blue-500 hover:text-blue-600 transition-colors"
-                      fill="none" 
-                      viewBox="0 0 24 24" 
-                      stroke="currentColor"
-                    >
-                      <path 
-                        strokeLinecap="round" 
-                        strokeLinejoin="round" 
-                        strokeWidth="2" 
-                        d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122"
-                      />
-                    </svg>
-                    <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded shadow-lg opacity-0 group-hover:opacity-100 pointer-events-none">
-                      {localRotation.toFixed(1)}°
-                    </div>
+                    <path 
+                      strokeLinecap="round" 
+                      strokeLinejoin="round" 
+                      strokeWidth="2" 
+                      d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122"
+                    />
+                  </svg>
+                  <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded shadow-lg opacity-0 group-hover:opacity-100 pointer-events-none">
+                    {localRotation.toFixed(1)}°
                   </div>
-                  
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDataPanelToggle();
-                    }}
-                    className="p-1 text-indigo-500 hover:text-indigo-700 rounded bg-white"
-                    title="Edit Data"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 7v10c0 2 1 3 3 3h10c2 0 3-1 3-3V7c0-2-1-3-3-3H7c-2 0-3 1-3 3zm0 5h16" />
-                    </svg>
-                  </button>
-                </>
+                </div>
+              )}
+              
+              {/* Data edit button - only visible when not minimized */}
+              {!isMinimized && (
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDataPanelToggle();
+                  }}
+                  className="p-1 text-indigo-500 hover:text-indigo-700 rounded bg-white"
+                  title="Edit Data"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 7v10c0 2 1 3 3 3h10c2 0 3-1 3-3V7c0-2-1-3-3-3H7c-2 0-3 1-3 3zm0 5h16" />
+                  </svg>
+                </button>
               )}
 
+              {/* Minimize/Maximize button - always visible */}
               <button 
                 onClick={(e) => {
                   e.stopPropagation();
                   setIsMinimized(!isMinimized);
                 }}
-                className="p-1 text-gray-500 hover:text-gray-700 rounded bg-white"
+                className={`${isMinimized ? 'p-0.5' : 'p-1'} text-gray-500 hover:text-gray-700 rounded bg-white`}
                 title={isMinimized ? "Restore" : "Minimize"}
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -570,11 +573,11 @@ export default function DraggableGraph({
                 </svg>
               </button>
               
-              {/* Always show the settings and close buttons, even when minimized */}
+              {/* Settings button - always visible */}
               <button 
                 onClick={handleSettingsButtonClick}
                 data-active={isSettingsOpen ? "true" : "false"}
-                className={`p-1 rounded transition-colors duration-100 ${
+                className={`${isMinimized ? 'p-0.5' : 'p-1'} rounded transition-colors duration-100 ${
                   isSettingsOpen 
                     ? 'bg-blue-500 text-white hover:bg-blue-600 shadow-sm' 
                     : 'bg-white text-gray-500 hover:text-gray-700 hover:bg-gray-100'
@@ -587,12 +590,13 @@ export default function DraggableGraph({
                 </svg>
               </button>
               
+              {/* Close button - always visible */}
               <button 
                 onClick={(e) => {
                   e.stopPropagation();
                   onRemove();
                 }}
-                className="p-1 text-red-500 hover:text-red-700 rounded bg-white"
+                className={`${isMinimized ? 'p-0.5' : 'p-1'} text-red-500 hover:text-red-700 rounded bg-white`}
                 title="Close graph"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
