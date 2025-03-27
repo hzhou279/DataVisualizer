@@ -693,75 +693,15 @@ export default function DraggableGraph({
               }}
             >
               <ScatterChart 
-                margin={{ top: 10, right: 10, bottom: 10, left: 10 }}
+                margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
                 style={{ background: "transparent" }} // Make chart background transparent
               >
-                {/* Conditionally render grid based on data size */}
-                {(!data || data.length <= 300) ? (
-                  <CartesianGrid 
-                    stroke="rgba(0,0,0,0.15)" 
-                    horizontal={true}
-                    vertical={true}
-                    strokeDasharray="0"
-                    horizontalPoints={[0.2, 0.4, 0.6, 0.8].map(
-                      factor => {
-                        const yMin = scaledDomains.yMin ?? 0;
-                        const yMax = scaledDomains.yMax ?? 100;
-                        return yMin + (yMax - yMin) * factor;
-                      }
-                    )}
-                    verticalPoints={[0.2, 0.4, 0.6, 0.8].map(
-                      factor => {
-                        const xMin = scaledDomains.xMin ?? 0;
-                        const xMax = scaledDomains.xMax ?? 100;
-                        return xMin + (xMax - xMin) * factor;
-                      }
-                    )}
-                  />
-                ) : data.length <= 1000 ? (
-                  <CartesianGrid 
-                    stroke="rgba(0,0,0,0.15)" 
-                    horizontal={true}
-                    vertical={true}
-                    strokeDasharray="0"
-                    horizontalPoints={[0.2, 0.4, 0.6, 0.8].map(
-                      factor => {
-                        const yMin = scaledDomains.yMin ?? 0;
-                        const yMax = scaledDomains.yMax ?? 100;
-                        return yMin + (yMax - yMin) * factor;
-                      }
-                    )}
-                    verticalPoints={[0.2, 0.4, 0.6, 0.8].map(
-                      factor => {
-                        const xMin = scaledDomains.xMin ?? 0;
-                        const xMax = scaledDomains.xMax ?? 100;
-                        return xMin + (xMax - xMin) * factor;
-                      }
-                    )}
-                  />
-                ) : (
-                  <CartesianGrid 
-                    stroke="rgba(0,0,0,0.15)" 
-                    horizontal={true}
-                    vertical={true}
-                    strokeDasharray="0"
-                    strokeWidth={1}
-                    horizontalPoints={[0.2, 0.4, 0.6, 0.8].map(
-                      factor => {
-                        const yMin = scaledDomains.yMin ?? 0;
-                        const yMax = scaledDomains.yMax ?? 100;
-                        return yMin + (yMax - yMin) * factor;
-                      }
-                    )}
-                    verticalPoints={[0.2, 0.4, 0.6, 0.8].map(
-                      factor => {
-                        const xMin = scaledDomains.xMin ?? 0;
-                        const xMax = scaledDomains.xMax ?? 100;
-                        return xMin + (xMax - xMin) * factor;
-                      }
-                    )}
-                  />
-                )}
+                {/* Simplified CartesianGrid approach to eliminate rendering issues */}
+                <CartesianGrid 
+                  stroke="rgba(0,0,0,0.15)" 
+                  strokeDasharray="0"
+                  strokeWidth={data && data.length > 1000 ? 0.5 : 1}
+                />
                 <XAxis 
                   type="number" 
                   dataKey="x" 
@@ -776,7 +716,7 @@ export default function DraggableGraph({
                         scaledDomains.xMax !== undefined ? scaledDomains.xMax : 'auto'
                       ]
                   } 
-                  allowDataOverflow={true}
+                  allowDataOverflow={false}
                   includeHidden={true}
                   allowDecimals={true}
                   // Generate nice ticks for better readability
@@ -860,7 +800,7 @@ export default function DraggableGraph({
                         scaledDomains.yMax !== undefined ? scaledDomains.yMax : 'auto'
                       ]
                   }
-                  allowDataOverflow={true}
+                  allowDataOverflow={false}
                   includeHidden={true}
                   allowDecimals={true}
                   // Generate nice ticks for better readability
