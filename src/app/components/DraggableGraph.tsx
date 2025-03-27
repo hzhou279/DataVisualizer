@@ -229,6 +229,9 @@ export default function DraggableGraph({
       y: Math.max(...yValues)
     };
     
+    console.log(`DEBUG calculatedDomains - Actual Data Range: X:[${dataMin.x}, ${dataMax.x}], Y:[${dataMin.y}, ${dataMax.y}]`);
+    console.log(`DEBUG calculatedDomains - Input localDomains: `, localDomains);
+    
     // Use provided domains or calculate from data
     const domainValues = {
       xMin: localDomains.xMin !== undefined ? localDomains.xMin : (quadrantMode === 'all' ? Math.min(dataMin.x, 0) : (dataMin.x < 0 ? dataMin.x : 0)),
@@ -236,6 +239,8 @@ export default function DraggableGraph({
       yMin: localDomains.yMin !== undefined ? localDomains.yMin : (quadrantMode === 'all' ? Math.min(dataMin.y, 0) : (dataMin.y < 0 ? dataMin.y : 0)),
       yMax: localDomains.yMax !== undefined ? localDomains.yMax : dataMax.y
     };
+    
+    console.log(`DEBUG calculatedDomains - Initial Domain Values: X:[${domainValues.xMin}, ${domainValues.xMax}], Y:[${domainValues.yMin}, ${domainValues.yMax}]`);
     
     // Calculate data ranges to determine appropriate padding
     const xRange = domainValues.xMax - domainValues.xMin;
@@ -245,12 +250,16 @@ export default function DraggableGraph({
     const xPadding = xRange * 0.05;
     const yPadding = yRange * 0.05;
     
-    return {
+    const result = {
       xMin: domainValues.xMin - xPadding,
       xMax: domainValues.xMax + xPadding,
       yMin: domainValues.yMin - yPadding,
       yMax: domainValues.yMax + yPadding
     };
+    
+    console.log(`DEBUG calculatedDomains - Final Padded Domains: X:[${result.xMin}, ${result.xMax}], Y:[${result.yMin}, ${result.yMax}]`);
+    
+    return result;
   }, [data, localDomains, quadrantMode]);
 
   // Update scaled domains when domains are calculated
@@ -770,12 +779,56 @@ export default function DraggableGraph({
                   allowDataOverflow={true}
                   includeHidden={true}
                   allowDecimals={true}
-                  // Force exactly 5 intervals by using explicit ticks
+                  // Generate nice ticks for better readability
                   ticks={(() => {
                     const min = scaledDomains.xMin ?? 0;
                     const max = scaledDomains.xMax ?? 100;
-                    const step = (max - min) / 5;
-                    return [min, min + step, min + 2*step, min + 3*step, min + 4*step, max];
+                    
+                    console.log(`DEBUG X-Axis - Domain: [${min}, ${max}]`);
+                    
+                    // Calculate a nice step size based on the range
+                    const range = max - min;
+                    
+                    // Determine ideal tick count (5-7 ticks is usually good)
+                    const targetTickCount = 5;
+                    
+                    // Calculate initial step size
+                    let stepSize = range / targetTickCount;
+                    
+                    // Round to a nice number (1, 2, 5, 10, 20, 50, etc.)
+                    const magnitude = Math.pow(10, Math.floor(Math.log10(stepSize)));
+                    const normalizedStep = stepSize / magnitude;
+                    
+                    console.log(`DEBUG X-Axis - Range: ${range}, Initial Step: ${stepSize}, Magnitude: ${magnitude}, NormalizedStep: ${normalizedStep}`);
+                    
+                    // Choose a nice step size
+                    if (normalizedStep < 1.5) {
+                      stepSize = magnitude;
+                    } else if (normalizedStep < 3) {
+                      stepSize = 2 * magnitude;
+                    } else if (normalizedStep < 7) {
+                      stepSize = 5 * magnitude;
+                    } else {
+                      stepSize = 10 * magnitude;
+                    }
+                    
+                    // Calculate starting point (round down to nice multiple of step size)
+                    let start = Math.floor(min / stepSize) * stepSize;
+                    
+                    console.log(`DEBUG X-Axis - Final Step: ${stepSize}, Start: ${start}`);
+                    
+                    // Generate ticks
+                    const ticks = [];
+                    let current = start;
+                    
+                    while (current <= max) {
+                      ticks.push(current);
+                      current += stepSize;
+                    }
+                    
+                    console.log(`DEBUG X-Axis - Generated Ticks: ${JSON.stringify(ticks)}`);
+                    
+                    return ticks;
                   })()}
                   padding={{ left: 0, right: 0 }}
                   axisLine={{ stroke: '#000', strokeWidth: 1.5 }}
@@ -810,12 +863,56 @@ export default function DraggableGraph({
                   allowDataOverflow={true}
                   includeHidden={true}
                   allowDecimals={true}
-                  // Force exactly 5 intervals by using explicit ticks
+                  // Generate nice ticks for better readability
                   ticks={(() => {
                     const min = scaledDomains.yMin ?? 0;
                     const max = scaledDomains.yMax ?? 100;
-                    const step = (max - min) / 5;
-                    return [min, min + step, min + 2*step, min + 3*step, min + 4*step, max];
+                    
+                    console.log(`DEBUG Y-Axis - Domain: [${min}, ${max}]`);
+                    
+                    // Calculate a nice step size based on the range
+                    const range = max - min;
+                    
+                    // Determine ideal tick count (5-7 ticks is usually good)
+                    const targetTickCount = 5;
+                    
+                    // Calculate initial step size
+                    let stepSize = range / targetTickCount;
+                    
+                    // Round to a nice number (1, 2, 5, 10, 20, 50, etc.)
+                    const magnitude = Math.pow(10, Math.floor(Math.log10(stepSize)));
+                    const normalizedStep = stepSize / magnitude;
+                    
+                    console.log(`DEBUG Y-Axis - Range: ${range}, Initial Step: ${stepSize}, Magnitude: ${magnitude}, NormalizedStep: ${normalizedStep}`);
+                    
+                    // Choose a nice step size
+                    if (normalizedStep < 1.5) {
+                      stepSize = magnitude;
+                    } else if (normalizedStep < 3) {
+                      stepSize = 2 * magnitude;
+                    } else if (normalizedStep < 7) {
+                      stepSize = 5 * magnitude;
+                    } else {
+                      stepSize = 10 * magnitude;
+                    }
+                    
+                    // Calculate starting point (round down to nice multiple of step size)
+                    let start = Math.floor(min / stepSize) * stepSize;
+                    
+                    console.log(`DEBUG Y-Axis - Final Step: ${stepSize}, Start: ${start}`);
+                    
+                    // Generate ticks
+                    const ticks = [];
+                    let current = start;
+                    
+                    while (current <= max) {
+                      ticks.push(current);
+                      current += stepSize;
+                    }
+                    
+                    console.log(`DEBUG Y-Axis - Generated Ticks: ${JSON.stringify(ticks)}`);
+                    
+                    return ticks;
                   })()}
                   padding={{ top: 0, bottom: 0 }}
                   axisLine={{ stroke: '#000', strokeWidth: 1.5 }}

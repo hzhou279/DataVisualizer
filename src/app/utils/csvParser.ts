@@ -54,19 +54,68 @@ export function parseCSVData(data: any[]): ParsedData[] {
   
   // Helper function to round domain values nicely
   const roundDomainValue = (value: number, isMin: boolean): number => {
-    // Round to nice numbers that are multiples of 5 or 10
+    // Handle zero specially
     if (value === 0) return 0;
     
+    console.log(`DEBUG roundDomainValue - Input: ${value}, isMin: ${isMin}`);
+    
     const absValue = Math.abs(value);
-    const magnitude = Math.pow(10, Math.floor(Math.log10(absValue)));
+    
+    // For values close to nice numbers, don't over-expand the range
+    // Calculate a more reasonable magnitude based on the range
+    const adjustedMagnitude = Math.pow(10, Math.floor(Math.log10(absValue)));
+    
+    // If the value is already close to a nice number, use a smaller magnitude
+    const normalizedValue = absValue / adjustedMagnitude;
+    
+    console.log(`DEBUG roundDomainValue - absValue: ${absValue}, magnitude: ${adjustedMagnitude}, normalizedValue: ${normalizedValue}`);
+    
+    let niceValue;
     
     if (isMin) {
-      // For minimum values, round down
-      return Math.floor(value / magnitude) * magnitude;
+      // For minimum values, round down but don't go too far
+      if (normalizedValue < 1.5) {
+        // For values < 1.5, round down to nearest integer
+        niceValue = Math.floor(normalizedValue) * adjustedMagnitude;
+      } else if (normalizedValue < 3) {
+        // For values < 3, use the lower multiple of 0.5
+        niceValue = Math.floor(normalizedValue * 2) / 2 * adjustedMagnitude;
+      } else if (normalizedValue < 7) {
+        // For values < 7, use the lower multiple of 1
+        niceValue = Math.floor(normalizedValue) * adjustedMagnitude;
+      } else {
+        // For values >= 7, use the next lower multiple of 5
+        niceValue = Math.floor(normalizedValue / 5) * 5 * adjustedMagnitude;
+      }
+      
+      // Apply sign
+      niceValue = niceValue * (value < 0 ? -1 : 1);
     } else {
-      // For maximum values, round up
-      return Math.ceil(value / magnitude) * magnitude;
+      // For maximum values, round up but don't go too far
+      if (normalizedValue <= 1.2) {
+        // For values ≤ 1.2, use the next higher multiple of 0.2
+        niceValue = Math.ceil(normalizedValue * 5) / 5 * adjustedMagnitude;
+      } else if (normalizedValue <= 2) {
+        // For values ≤ 2, use the next higher multiple of 0.5
+        niceValue = Math.ceil(normalizedValue * 2) / 2 * adjustedMagnitude;
+      } else if (normalizedValue <= 5) {
+        // For values ≤ 5, use the next integer
+        niceValue = Math.ceil(normalizedValue) * adjustedMagnitude;
+      } else if (normalizedValue <= 10) {
+        // For values ≤ 10, round to next multiple of 2
+        niceValue = Math.ceil(normalizedValue / 2) * 2 * adjustedMagnitude;
+      } else {
+        // For values > 10, round to next multiple of 5
+        niceValue = Math.ceil(normalizedValue / 5) * 5 * adjustedMagnitude;
+      }
+      
+      // Apply sign
+      niceValue = niceValue * (value < 0 ? -1 : 1);
     }
+    
+    console.log(`DEBUG roundDomainValue - Output: ${niceValue}`);
+    
+    return niceValue;
   };
   
   // Get min/max values
@@ -74,6 +123,8 @@ export function parseCSVData(data: any[]): ParsedData[] {
   const xMax = Math.max(...result.map(point => point.x));
   const yMin = Math.min(...result.map(point => point.y));
   const yMax = Math.max(...result.map(point => point.y));
+  
+  console.log(`DEBUG parseCSVData - Actual Data Range: X:[${xMin}, ${xMax}], Y:[${yMin}, ${yMax}]`);
   
   // Calculate if we need to use four quadrants
   const shouldUseFourQuadrants = xMin < 0 || yMin < 0;
@@ -97,6 +148,8 @@ export function parseCSVData(data: any[]): ParsedData[] {
       yMax: roundDomainValue(yMax, false)
     };
   }
+  
+  console.log(`DEBUG parseCSVData - Calculated Domains: X:[${domains.xMin}, ${domains.xMax}], Y:[${domains.yMin}, ${domains.yMax}]`);
   
   // Add metadata to the first data point (for processing in page.tsx)
   if (result.length > 0) {
