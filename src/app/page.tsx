@@ -6,6 +6,7 @@ import DraggableGraph from './components/DraggableGraph';
 import { parseCSVData, validateCSVFormat, ParsedData } from './utils/csvParser';
 import SettingsPanel from './components/SettingsPanel';
 import DataPanel from './components/DataPanel';
+import GlobalCoordinateGrid from './components/GlobalCoordinateGrid';
 
 type QuadrantMode = 'first' | 'all';
 
@@ -36,6 +37,8 @@ export interface Graph {
     dotSize: number;
     showLabels: boolean;
   };
+  globalCoordinate?: { x: number; y: number };
+  rotationCenter?: { x: number; y: number };
 }
 
 export default function Home() {
@@ -44,6 +47,9 @@ export default function Home() {
   const [selectedDataGraphId, setSelectedDataGraphId] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [zIndexCounter, setZIndexCounter] = useState(100);
+  const [showGrid, setShowGrid] = useState(false);
+  const [gridSize, setGridSize] = useState(50);
+  const [showGridLabels, setShowGridLabels] = useState(true);
 
   const handleFileProcessed = (parsedData: ParsedData[], fileName: string) => {
     if (parsedData.length === 0) {
@@ -86,7 +92,9 @@ export default function Home() {
         showGrid: true,
         dotSize: 5,
         showLabels: true
-      }
+      },
+      globalCoordinate: { x: 0, y: 0 },
+      rotationCenter: { x: 0, y: 0 }
     };
     
     setGraphs([...graphs, newGraph]);
@@ -135,6 +143,16 @@ export default function Home() {
 
   // Function to remove a graph
   const handleRemoveGraph = (graphId: string) => {
+    // Close any open panels for this graph
+    if (selectedGraphId === graphId) {
+      setSelectedGraphId(null);
+      setShowSettings(false);
+    }
+    if (selectedDataGraphId === graphId) {
+      setSelectedDataGraphId(null);
+    }
+    
+    // Remove the graph
     setGraphs((prevGraphs) => prevGraphs.filter(graph => graph.id !== graphId));
   };
 
@@ -206,8 +224,13 @@ export default function Home() {
 
   const handleGraphClose = (id: string) => {
     setGraphs(graphs.filter(graph => graph.id !== id));
-    if (selectedGraphId === id) setSelectedGraphId(null);
-    if (selectedDataGraphId === id) setSelectedDataGraphId(null);
+    if (selectedGraphId === id) {
+      setSelectedGraphId(null);
+      setShowSettings(false);
+    }
+    if (selectedDataGraphId === id) {
+      setSelectedDataGraphId(null);
+    }
   };
 
   const handleGraphMove = (id: string, position: { x: number; y: number }) => {
@@ -260,8 +283,44 @@ export default function Home() {
           <h1 className="text-3xl font-bold text-indigo-900">CSV Graph Visualizer</h1>
           <p className="text-sm text-indigo-700 mt-1">Upload CSV files to visualize data as interactive scatter plots</p>
         </div>
-        <div className="w-52">
-          <FileUploader onDataParsed={handleFileProcessed} />
+        <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2">
+            <button 
+              onClick={() => setShowGrid(!showGrid)}
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                showGrid ? 'bg-indigo-600 text-white' : 'bg-white text-indigo-600 border border-indigo-300'
+              }`}
+              title="Toggle coordinate grid"
+            >
+              {showGrid ? 'Hide Grid' : 'Show Grid'}
+            </button>
+            {showGrid && (
+              <div className="flex items-center space-x-2 bg-white px-2 py-1 rounded-md border border-gray-300">
+                <label className="text-xs text-gray-600">Grid size:</label>
+                <select 
+                  value={gridSize} 
+                  onChange={(e) => setGridSize(Number(e.target.value))}
+                  className="text-xs border border-gray-300 rounded p-1"
+                >
+                  <option value="25">25px</option>
+                  <option value="50">50px</option>
+                  <option value="100">100px</option>
+                </select>
+                <label className="flex items-center text-xs text-gray-600">
+                  <input 
+                    type="checkbox" 
+                    checked={showGridLabels} 
+                    onChange={() => setShowGridLabels(!showGridLabels)}
+                    className="mr-1"
+                  />
+                  Labels
+                </label>
+              </div>
+            )}
+          </div>
+          <div className="w-52">
+            <FileUploader onDataParsed={handleFileProcessed} />
+          </div>
         </div>
       </header>
       
@@ -270,6 +329,9 @@ export default function Home() {
           {/* Graph Area */}
           <div className="flex-1 p-4 relative">
             <div className="relative w-full h-full">
+              {/* Coordinate Grid */}
+              {showGrid && <GlobalCoordinateGrid gridSize={gridSize} showLabels={showGridLabels} />}
+              
               {graphs.length > 0 ? (
                 graphs.map((graph, index) => (
                   <DraggableGraph

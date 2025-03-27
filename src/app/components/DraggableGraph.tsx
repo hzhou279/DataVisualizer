@@ -31,6 +31,8 @@ interface DraggableGraphProps {
   };
   quadrantMode?: 'first' | 'all';
   onDataPanelToggle: () => void;
+  globalCoordinate?: { x: number; y: number };
+  rotationCenter?: { x: number; y: number };
 }
 
 export default function DraggableGraph({ 
@@ -51,7 +53,9 @@ export default function DraggableGraph({
   domains,
   axisIntervals,
   quadrantMode = 'first',
-  onDataPanelToggle
+  onDataPanelToggle,
+  globalCoordinate = { x: 0, y: 0 },
+  rotationCenter = { x: 0, y: 0 },
 }: DraggableGraphProps) {
   // Store local rotation to ensure UI updates immediately
   const [localRotation, setLocalRotation] = useState(rotation);
@@ -75,6 +79,10 @@ export default function DraggableGraph({
     yMin: domains?.yMin,
     yMax: domains?.yMax
   });
+  const [isDragging, setIsDragging] = useState(false);
+  const [isAnimating, setIsAnimating] = useState(false);
+  const [showCoordinateTooltip, setShowCoordinateTooltip] = useState(false);
+  const [currentCoordinates, setCurrentCoordinates] = useState({ x: 0, y: 0 });
   
   // Reference to the container element
   const containerRef = React.useRef<HTMLDivElement>(null);
@@ -304,62 +312,99 @@ export default function DraggableGraph({
     setLocalDomains(newDomains);
   };
 
-  // Create a custom style object with CSS variable for rotation
-  const containerStyle = {
-    zIndex,
-    position: 'absolute' as const,
-    left: position.x,
-    top: position.y,
-    width: isMinimized ? 300 : size.width,
-    height: isMinimized ? 40 : size.height,
-    transform: `rotate(${localRotation}deg)`,
-    transformOrigin: 'center center',
-    opacity: 1, // Full opacity for all graphs
-    transition: isMinimized ? 'width 0.2s ease, height 0.2s ease' : 'transform 0.3s ease-in-out'
-  };
+  // Calculate transform for rotation using rotation center
+  const transformStyle = useMemo(() => {
+    // Use rotation center as pivot point for rotation
+    // Convert global rotation center to local coordinates
+    const localCenterX = rotationCenter.x - globalCoordinate.x;
+    const localCenterY = rotationCenter.y - globalCoordinate.y;
+    
+    // Transform string that rotates around the specified center
+    return `rotate(${localRotation}deg) translate(${-localCenterX}px, ${-localCenterY}px) rotate(${-localRotation}deg) translate(${localCenterX}px, ${localCenterY}px)`;
+  }, [localRotation, rotationCenter, globalCoordinate]);
 
-  // Function to handle graph rotation with better sensitivity
+  // Style for the component
+  const style = useMemo(() => {
+    const posX = position.x + (globalCoordinate?.x || 0);
+    const posY = position.y + (globalCoordinate?.y || 0);
+    
+    return {
+      position: 'absolute' as const,
+      width: isMinimized ? '300px' : `${size.width}px`,
+      height: isMinimized ? '40px' : `${size.height}px`,
+      left: `${posX}px`,
+      top: `${posY}px`,
+      transform: transformStyle,
+      backgroundColor: 'white',
+      border: '1px solid #ddd',
+      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+      borderRadius: '4px',
+      overflow: 'hidden',
+      zIndex: zIndex || 0,
+      transition: isMinimized ? 'width 0.2s ease, height 0.2s ease' : 'transform 0.3s ease-in-out',
+      display: 'flex',
+      flexDirection: 'column' as const,
+    };
+  }, [position, size, zIndex, isMinimized, transformStyle, globalCoordinate]);
+
+  // Function to handle rotation
   const handleRotate = (e: React.MouseEvent) => {
+    e.preventDefault();
     e.stopPropagation();
     
-    // Get the center point of the graph
-    const rect = (e.currentTarget as HTMLElement).closest('.graph-container')?.getBoundingClientRect();
-    if (!rect) return;
+    // Set flag to enable smooth rotation animation
+    setIsAnimating(true);
     
-    const centerX = rect.left + rect.width / 2;
-    const centerY = rect.top + rect.height / 2;
+    // Get the center of rotation (using specified rotation center)
+    const graphRect = containerRef.current?.getBoundingClientRect();
+    if (!graphRect) return;
     
-    // Calculate initial angle between cursor and center
-    const initialDx = e.clientX - centerX;
-    const initialDy = e.clientY - centerY;
-    const initialAngle = Math.atan2(initialDy, initialDx) * (180 / Math.PI);
+    // Calculate local coordinates of rotation center
+    const centerX = rotationCenter.x - globalCoordinate.x;
+    const centerY = rotationCenter.y - globalCoordinate.y;
     
-    // Starting rotation angle
-    const startRotation = localRotation;
-    
+    // Get initial angle from mouse position to rotation center
+    const initialAngle = Math.atan2(
+      e.clientY - (graphRect.top + centerY),
+      e.clientX - (graphRect.left + centerX)
+    ) * (180 / Math.PI);
+
     function onMouseMove(moveEvent: MouseEvent) {
-      // Calculate new angle
-      const dx = moveEvent.clientX - centerX;
-      const dy = moveEvent.clientY - centerY;
-      const newAngle = Math.atan2(dy, dx) * (180 / Math.PI);
+      if (!containerRef.current || !graphRect) return;
       
-      // Calculate angle difference (with sensitivity reduction)
-      let angleDiff = newAngle - initialAngle;
+      // Calculate new angle from current mouse position to rotation center
+      const newAngle = Math.atan2(
+        moveEvent.clientY - (graphRect.top + centerY),
+        moveEvent.clientX - (graphRect.left + centerX)
+      ) * (180 / Math.PI);
       
-      // Reduce sensitivity by dividing the angle change
-      angleDiff = angleDiff / 2;
+      // Calculate rotation change
+      let deltaAngle = newAngle - initialAngle;
       
-      // Update rotation
-      const newRotation = (startRotation + angleDiff + 360) % 360;
+      // Normalize to keep within 0-360 range
+      let newRotation = (localRotation + deltaAngle) % 360;
+      if (newRotation < 0) newRotation += 360;
+      
+      // Update the local rotation state for UI responsiveness
       setLocalRotation(newRotation);
-      onRotationChange(newRotation);
+      setRotationValue(newRotation.toFixed(1));
     }
-    
+
     function onMouseUp() {
+      // Clean up event listeners
       document.removeEventListener('mousemove', onMouseMove);
       document.removeEventListener('mouseup', onMouseUp);
+      
+      // Apply rotation to parent component
+      onRotationChange(localRotation);
+      
+      // Disable animation after rotation completes
+      setTimeout(() => {
+        setIsAnimating(false);
+      }, 300);
     }
     
+    // Add event listeners
     document.addEventListener('mousemove', onMouseMove);
     document.addEventListener('mouseup', onMouseUp);
   };
@@ -475,7 +520,7 @@ export default function DraggableGraph({
     <>
       <div 
         ref={containerRef}
-        style={containerStyle} 
+        style={style} 
         className="graph-container"
       >
         <div className="bg-transparent border border-black rounded-lg shadow-lg h-full flex flex-col overflow-hidden">
@@ -510,6 +555,13 @@ export default function DraggableGraph({
                 {filename || 'Graph'} {!isMinimized && `(${localRotation.toFixed(1)}°)`}
               </h3>
             </div>
+            
+            {/* Display position coordinates in the header */}
+            {!isMinimized && (
+              <div className="text-xs text-gray-500 mr-2">
+                {`Pos: (${Math.round(position.x + (globalCoordinate?.x || 0))}, ${Math.round(position.y + (globalCoordinate?.y || 0))})`}
+              </div>
+            )}
             
             {/* Controls */}
             <div className={`flex ${isMinimized ? 'space-x-0.5' : 'space-x-1'} z-10`}>
@@ -858,12 +910,35 @@ export default function DraggableGraph({
                  onMouseDown={(e) => handleDrag(e, 'topLeft')}></div>
           </>
         )}
+        
+        {/* Coordinate tooltip - shows when dragging */}
+        {showCoordinateTooltip && (
+          <div 
+            style={{
+              position: 'absolute',
+              top: '-40px',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              backgroundColor: 'rgba(30, 58, 138, 0.9)',
+              color: 'white',
+              padding: '4px 8px',
+              borderRadius: '4px',
+              fontSize: '12px',
+              fontWeight: 'bold',
+              whiteSpace: 'nowrap',
+              zIndex: 1000
+            }}
+          >
+            Global coordinates: ({Math.round(currentCoordinates.x)}, {Math.round(currentCoordinates.y)})
+          </div>
+        )}
       </div>
     </>
   );
   
   // Custom drag handler implementation
   function handleDrag(e: React.MouseEvent, direction: string) {
+    e.stopPropagation();
     e.preventDefault();
     
     // Don't start drag if we clicked on a button or input
@@ -891,24 +966,69 @@ export default function DraggableGraph({
         graphElement.style.zIndex = (maxZIndex + 1).toString();
       }
     }
-
+    
+    setIsDragging(true);
+    // Show coordinate tooltip when dragging starts
+    setShowCoordinateTooltip(true);
+    
     const initialX = e.clientX;
     const initialY = e.clientY;
     const initialLeft = position.x;
     const initialTop = position.y;
     const initialWidth = size.width;
     const initialHeight = size.height;
-    const initialRotation = localRotation;
     
-    // Handle mouse move
+    // Create a throttled onMouseMove function
+    let lastMoveTime = Date.now();
+    let throttleTimer: NodeJS.Timeout | null = null;
+    
     function onMouseMove(moveEvent: MouseEvent) {
+      const now = Date.now();
+      const elapsed = now - lastMoveTime;
+      
+      // Throttle move events for better performance
+      if (elapsed < 16) {
+        if (!throttleTimer) {
+          throttleTimer = setTimeout(() => {
+            throttleTimer = null;
+            onMouseMove(moveEvent);
+          }, 16 - elapsed);
+        }
+        return;
+      }
+      
+      lastMoveTime = now;
+      
       const dx = moveEvent.clientX - initialX;
       const dy = moveEvent.clientY - initialY;
       
       // If just moving (not resizing)
       if (direction === 'move') {
-        // Remove rotation transformation - move should be in screen coordinates, not graph coordinates
-        onPositionChange(initialLeft + dx, initialTop + dy);
+        // Calculate new position considering global coordinates
+        let newX = initialLeft + dx;
+        let newY = initialTop + dy;
+        
+        // Calculate position with global coordinate offset for bounds checking
+        const actualX = newX + (globalCoordinate?.x || 0);
+        const actualY = newY + (globalCoordinate?.y || 0);
+        
+        // Update current coordinates for tooltip
+        setCurrentCoordinates({ x: actualX, y: actualY });
+        
+        // Ensure the graph remains within the window boundaries
+        const maxX = window.innerWidth - size.width;
+        const maxY = window.innerHeight - size.height;
+        
+        // Apply boundary constraints
+        if (actualX < 0) newX = -globalCoordinate.x;
+        if (actualY < 0) newY = -globalCoordinate.y;
+        if (actualX > maxX) newX = maxX - globalCoordinate.x;
+        if (actualY > maxY) newY = maxY - globalCoordinate.y;
+        
+        // Update only if position has changed significantly
+        if (Math.abs(newX - position.x) > 1 || Math.abs(newY - position.y) > 1) {
+          onPositionChange(newX, newY);
+        }
         return;
       }
       
@@ -1028,6 +1148,9 @@ export default function DraggableGraph({
     function onMouseUp() {
       document.removeEventListener('mousemove', onMouseMove);
       document.removeEventListener('mouseup', onMouseUp);
+      setIsDragging(false);
+      // Hide coordinate tooltip when dragging ends
+      setShowCoordinateTooltip(false);
     }
     
     // Add event listeners

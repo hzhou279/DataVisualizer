@@ -78,6 +78,10 @@ export default function SettingsPanel({ graph, onClose, onSettingsUpdate }: Sett
     showGrid: graph.settings?.showGrid !== undefined ? graph.settings.showGrid : true,
     dotSize: graph.settings?.dotSize !== undefined ? graph.settings.dotSize : 5,
     showLabels: graph.settings?.showLabels !== undefined ? graph.settings.showLabels : true,
+    globalX: graph.globalCoordinate?.x?.toString() || '0',
+    globalY: graph.globalCoordinate?.y?.toString() || '0',
+    rotationCenterX: graph.rotationCenter?.x?.toString() || '0',
+    rotationCenterY: graph.rotationCenter?.y?.toString() || '0',
   });
 
   // Update local state when graph props change
@@ -97,6 +101,10 @@ export default function SettingsPanel({ graph, onClose, onSettingsUpdate }: Sett
       showGrid: graph.settings?.showGrid !== undefined ? graph.settings.showGrid : true,
       dotSize: graph.settings?.dotSize !== undefined ? graph.settings.dotSize : 5,
       showLabels: graph.settings?.showLabels !== undefined ? graph.settings.showLabels : true,
+      globalX: graph.globalCoordinate?.x?.toString() || '0',
+      globalY: graph.globalCoordinate?.y?.toString() || '0',
+      rotationCenterX: graph.rotationCenter?.x?.toString() || '0',
+      rotationCenterY: graph.rotationCenter?.y?.toString() || '0',
     });
   }, [graph]);
 
@@ -149,6 +157,17 @@ export default function SettingsPanel({ graph, onClose, onSettingsUpdate }: Sett
       y: parseInt(localState.yIntervals) || 5
     };
     
+    // Parse global coordinate and rotation center
+    const globalCoordinate = {
+      x: parseFloat(localState.globalX) || 0,
+      y: parseFloat(localState.globalY) || 0
+    };
+    
+    const rotationCenter = {
+      x: parseFloat(localState.rotationCenterX) || 0,
+      y: parseFloat(localState.rotationCenterY) || 0
+    };
+    
     onSettingsUpdate({
       size: { 
         width: parseFloat(localState.width.toString()) || graph.size.width, 
@@ -163,7 +182,9 @@ export default function SettingsPanel({ graph, onClose, onSettingsUpdate }: Sett
         showGrid: localState.showGrid,
         dotSize: parseInt(localState.dotSize.toString()) || 5,
         showLabels: localState.showLabels
-      }
+      },
+      globalCoordinate,
+      rotationCenter
     });
     
     // Automatically close the panel after applying changes
@@ -389,26 +410,87 @@ export default function SettingsPanel({ graph, onClose, onSettingsUpdate }: Sett
           </div>
         </div>
 
-        {/* Rotation */}
+        {/* Graph Transformation Settings */}
         <div>
-          <h4 className="font-medium text-sm mb-2 text-indigo-900">Rotation (degrees)</h4>
-          <div className="flex space-x-2">
-            <input
-              type="number"
-              id="rotation"
-              name="rotation"
-              value={localState.rotation}
-              onChange={handleInputChange}
-              className="flex-1 p-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-indigo-300 focus:border-indigo-500"
-              min="0"
-              max="360"
-            />
-            <button 
-              onClick={handleResetRotation}
-              className="px-3 py-2 bg-gray-200 hover:bg-gray-300 rounded text-sm"
-            >
-              Reset
-            </button>
+          <h4 className="font-medium text-sm mb-2 text-indigo-900">Graph Transformation</h4>
+          <div className="space-y-2">
+            <div>
+              <label htmlFor="rotation" className="block text-xs text-gray-500 mb-1">Rotation (degrees)</label>
+              <div className="flex space-x-2">
+                <input
+                  type="number"
+                  id="rotation"
+                  name="rotation"
+                  value={localState.rotation}
+                  onChange={handleInputChange}
+                  className="w-full p-2 border border-gray-300 rounded text-sm"
+                />
+                <button 
+                  onClick={handleResetRotation}
+                  className="px-2 py-1 bg-gray-200 rounded text-sm hover:bg-gray-300"
+                >
+                  Reset
+                </button>
+              </div>
+            </div>
+
+            {/* Global Coordinate */}
+            <div className="pt-2">
+              <label className="block text-xs text-gray-500 mb-1">Global Coordinate</label>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label htmlFor="globalX" className="block text-xs text-gray-500 mb-1">X</label>
+                  <input
+                    type="number"
+                    id="globalX"
+                    name="globalX"
+                    value={localState.globalX}
+                    onChange={handleInputChange}
+                    className="w-full p-2 border border-gray-300 rounded text-sm"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="globalY" className="block text-xs text-gray-500 mb-1">Y</label>
+                  <input
+                    type="number"
+                    id="globalY"
+                    name="globalY"
+                    value={localState.globalY}
+                    onChange={handleInputChange}
+                    className="w-full p-2 border border-gray-300 rounded text-sm"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Rotation Center */}
+            <div className="pt-2">
+              <label className="block text-xs text-gray-500 mb-1">Rotation Center</label>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label htmlFor="rotationCenterX" className="block text-xs text-gray-500 mb-1">X</label>
+                  <input
+                    type="number"
+                    id="rotationCenterX"
+                    name="rotationCenterX"
+                    value={localState.rotationCenterX}
+                    onChange={handleInputChange}
+                    className="w-full p-2 border border-gray-300 rounded text-sm"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="rotationCenterY" className="block text-xs text-gray-500 mb-1">Y</label>
+                  <input
+                    type="number"
+                    id="rotationCenterY"
+                    name="rotationCenterY"
+                    value={localState.rotationCenterY}
+                    onChange={handleInputChange}
+                    className="w-full p-2 border border-gray-300 rounded text-sm"
+                  />
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
