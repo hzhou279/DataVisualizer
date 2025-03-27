@@ -266,10 +266,10 @@ export default function Home() {
       </header>
       
       <main className="flex-1 flex flex-col">
-        <div className="bg-white rounded-lg shadow-xl flex-1 flex flex-col relative" style={{ minHeight: '85vh', overflow: 'visible' }}>
+        <div className="bg-white rounded-lg shadow-xl flex-1 flex flex-col relative" style={{ height: 'calc(100vh - 200px)', overflow: 'visible' }}>
           {/* Graph Area */}
           <div className="flex-1 p-4 relative">
-            <div className="relative w-full" style={{ height: '100%', minHeight: '500px' }}>
+            <div className="relative w-full h-full">
               {graphs.length > 0 ? (
                 graphs.map((graph, index) => (
                   <DraggableGraph

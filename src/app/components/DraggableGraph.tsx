@@ -79,66 +79,95 @@ export default function DraggableGraph({
   // Reference to the container element
   const containerRef = React.useRef<HTMLDivElement>(null);
 
-  // Handle window resize with a completely different approach
-  useEffect(() => {
+  // Create a memoized resize handler with the correct dependencies
+  const createResizeHandler = useCallback(() => {
     if (!isMinimized && data && data.length > 0) {
-      // Create reference to initial window dimensions and graph proportions
-      let initialWindowWidth = window.innerWidth;
-      let initialWindowHeight = window.innerHeight;
+      // Store initial dimensions for this handler instance
+      const initialGraphWidth = size.width;
+      const initialGraphHeight = size.height;
+      const initialWindowWidth = window.innerWidth;
+      const initialWindowHeight = window.innerHeight;
       
-      // Calculate initial ratio of graph to window
-      const initialWidthRatio = size.width / initialWindowWidth;
-      const initialHeightRatio = size.height / initialWindowHeight;
+      console.log(`Setting up resize handler - Graph: ${initialGraphWidth}x${initialGraphHeight}, Window: ${initialWindowWidth}x${initialWindowHeight}`);
       
-      console.log(`Initial graph to window ratio: Width=${initialWidthRatio.toFixed(2)}, Height=${initialHeightRatio.toFixed(2)}`);
-      
-      // Create a resize handler that enforces proportional resizing
-      const handleWindowResize = () => {
-        // Get new window dimensions
-        const newWindowWidth = window.innerWidth;
-        const newWindowHeight = window.innerHeight;
+      // Return the actual resize handler function
+      return () => {
+        const currentWindowWidth = window.innerWidth;
+        const currentWindowHeight = window.innerHeight;
         
-        // Skip if no change in window dimensions
-        if (newWindowWidth === initialWindowWidth && newWindowHeight === initialWindowHeight) {
+        // Skip if no actual window size change
+        if (currentWindowWidth === initialWindowWidth && currentWindowHeight === initialWindowHeight) {
           return;
         }
         
-        console.log(`Window resized: ${initialWindowWidth}x${initialWindowHeight} -> ${newWindowWidth}x${newWindowHeight}`);
+        // Calculate the change ratio for both dimensions
+        const widthRatio = currentWindowWidth / initialWindowWidth;
+        const heightRatio = currentWindowHeight / initialWindowHeight;
         
-        // Calculate proportional size based on window dimensions
-        // This ensures the graph changes size proportionally with the window
-        let newWidth = Math.round(newWindowWidth * initialWidthRatio);
-        let newHeight = Math.round(newWindowHeight * initialHeightRatio);
+        console.log(`Window resize detected - Current: ${currentWindowWidth}x${currentWindowHeight}, Ratio W:${widthRatio.toFixed(2)} H:${heightRatio.toFixed(2)}`);
+        
+        // Calculate new dimensions - using the ratio to scale from initial size
+        let newWidth = Math.round(initialGraphWidth * widthRatio);
+        let newHeight = Math.round(initialGraphHeight * heightRatio);
         
         // Apply min/max constraints
-        const minWidth = 250;
-        const minHeight = 200;
-        const maxWidth = Math.min(800, newWindowWidth * 0.7);
-        const maxHeight = Math.min(600, newWindowHeight * 0.7);
+        const minWidth = Math.min(250, currentWindowWidth * 0.6);  // Allow smaller widths on very small screens
+        const minHeight = Math.min(200, currentWindowHeight * 0.5); // Allow smaller heights on very small screens
+        const maxWidth = Math.min(800, currentWindowWidth * 0.9);  // Allow up to 90% of window width
+        const maxHeight = Math.min(600, currentWindowHeight * 0.8); // Allow up to 80% of window height
         
+        // Ensure we don't try to make the graph larger than the available space
         newWidth = Math.min(Math.max(newWidth, minWidth), maxWidth);
         newHeight = Math.min(Math.max(newHeight, minHeight), maxHeight);
         
-        console.log(`Resizing graph: ${size.width}x${size.height} -> ${newWidth}x${newHeight}`);
+        console.log(`New graph size: ${size.width}x${size.height} -> ${newWidth}x${newHeight}`);
         
-        // Update size if width or height actually changed
+        // Only update if dimensions actually changed
         if (newWidth !== size.width || newHeight !== size.height) {
+          // Ensure position is still valid (not off-screen)
+          let newX = position.x;
+          let newY = position.y;
+          
+          // If the graph would be positioned outside the visible area after resize, adjust position
+          if (newX + newWidth > currentWindowWidth) {
+            newX = Math.max(0, currentWindowWidth - newWidth - 20);
+          }
+          
+          if (newY + newHeight > currentWindowHeight) {
+            newY = Math.max(0, currentWindowHeight - newHeight - 20);
+          }
+          
+          // Update position if it changed
+          if (newX !== position.x || newY !== position.y) {
+            onPositionChange(newX, newY);
+          }
+          
+          // Update size
           onSizeChange(newWidth, newHeight);
         }
-        
-        // Update reference to current window dimensions
-        initialWindowWidth = newWindowWidth;
-        initialWindowHeight = newWindowHeight;
-      };
-      
-      // Handle resize
-      window.addEventListener('resize', handleWindowResize);
-      
-      return () => {
-        window.removeEventListener('resize', handleWindowResize);
       };
     }
-  }, [isMinimized, data, size.width, size.height, onSizeChange]);
+    return undefined;
+  }, [isMinimized, data, size.width, size.height, onSizeChange, position.x, position.y, onPositionChange]);
+
+  // Handle window resize
+  useEffect(() => {
+    const handleResize = createResizeHandler();
+    
+    if (handleResize) {
+      // Call resize handler on initial load to ensure proper sizing
+      setTimeout(handleResize, 100);
+      
+      window.addEventListener('resize', handleResize);
+      // Also handle the load event to ensure proper sizing after the window fully loads
+      window.addEventListener('load', handleResize);
+      
+      return () => {
+        window.removeEventListener('resize', handleResize);
+        window.removeEventListener('load', handleResize);
+      };
+    }
+  }, [createResizeHandler]);
   
   // Handle click action for the settings button
   const handleSettingsButtonClick = (e: React.MouseEvent) => {
@@ -419,7 +448,7 @@ export default function DraggableGraph({
     if (!settingsButton) return;
     
     // Manually update the button's state
-    settingsButton.dataset.active = isSettingsOpen ? 'true' : 'false';
+    settingsButton.dataset.active = isSettingsOpen ? "true" : "false";
     
     // Update button styling
     if (isSettingsOpen) {
@@ -429,7 +458,18 @@ export default function DraggableGraph({
       settingsButton.classList.remove('bg-blue-500', 'text-white', 'hover:bg-blue-600', 'shadow-sm');
       settingsButton.classList.add('bg-white', 'text-gray-500', 'hover:text-gray-700', 'hover:bg-gray-100');
     }
+    
+    console.log(`Settings button state updated: isSettingsOpen=${isSettingsOpen}`);
   }, [isSettingsOpen]);
+
+  // Force re-render of chart when size changes
+  const [chartKey, setChartKey] = useState(0);
+  
+  // When the size changes, force a re-render of the chart
+  useEffect(() => {
+    setChartKey(prev => prev + 1);
+    console.log(`Forcing chart redraw due to size change: ${size.width}x${size.height}`);
+  }, [size.width, size.height]);
 
   return (
     <>
@@ -564,13 +604,24 @@ export default function DraggableGraph({
           
           {/* Graph content */}
           {!isMinimized && (
-            <div className="flex-1 p-2 relative">
+            <div 
+              className="flex-1 p-2 relative flex flex-col" 
+              style={{ 
+                minHeight: 0, 
+                height: "calc(100% - 32px)"  // Subtract header height to ensure proper sizing
+              }}
+            >
               <ResponsiveContainer 
+                key={chartKey}
                 width="100%" 
                 height="100%"
+                debounce={50}
+                minHeight={50}
+                aspect={undefined}
                 onResize={(width, height) => {
                   if (width && height) {
                     setContentSize({ width, height });
+                    console.log(`Content resized to: ${width}x${height}`);
                   }
                 }}
               >
@@ -928,6 +979,10 @@ export default function DraggableGraph({
       }
       
       if (newWidth !== size.width || newHeight !== size.height) {
+        // Force chart key update to trigger re-render
+        setChartKey(prev => prev + 1);
+        
+        // Update size
         onSizeChange(newWidth, newHeight);
         
         // Trigger recalculation of axes and domains when resizing
