@@ -152,6 +152,17 @@ export default function Home() {
     );
   };
 
+  // Function to update domains when automatically calculated
+  const handleDomainsUpdate = (graphId: string, domains: { xMin?: number; xMax?: number; yMin?: number; yMax?: number }) => {
+    setGraphs((prevGraphs) =>
+      prevGraphs.map((graph) =>
+        graph.id === graphId
+          ? { ...graph, domains }
+          : graph
+      )
+    );
+  };
+
   // Function to remove a graph
   const handleRemoveGraph = (graphId: string) => {
     // Close any open panels for this graph
@@ -360,6 +371,7 @@ export default function Home() {
                   onRotationChange={(rotation) => handleRotationUpdate(graph.id, rotation)}
                   onColorChange={(color) => handleColorChange(graph.id, color)}
                   onAxisIntervalsChange={(intervals) => handleAxisIntervalsUpdate(graph.id, intervals)}
+                  onDomainsChange={(domains) => handleDomainsUpdate(graph.id, domains)}
                   onRemove={() => handleRemoveGraph(graph.id)}
                   isSettingsOpen={selectedGraphId === graph.id}
                   onToggleSettings={() => {

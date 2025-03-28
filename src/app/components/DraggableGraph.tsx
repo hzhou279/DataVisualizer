@@ -30,6 +30,7 @@ interface DraggableGraphProps {
     y: number;
   };
   onAxisIntervalsChange?: (intervals: { x: number; y: number }) => void;
+  onDomainsChange?: (domains: { xMin?: number; xMax?: number; yMin?: number; yMax?: number }) => void;
   quadrantMode?: 'first' | 'all';
   onDataPanelToggle: () => void;
   globalCoordinate?: { x: number; y: number };
@@ -55,6 +56,7 @@ export default function DraggableGraph({
   domains,
   axisIntervals,
   onAxisIntervalsChange,
+  onDomainsChange,
   quadrantMode = 'first',
   onDataPanelToggle,
   globalCoordinate = { x: 0, y: 0 },
@@ -278,6 +280,20 @@ export default function DraggableGraph({
   useEffect(() => {
     setScaledDomains(calculatedDomains);
     
+    // Notify parent component of domain changes when auto-calculated
+    // Only do this when domains are calculated automatically (first load or significant data changes)
+    if (onDomainsChange && data && data.length > 0 && !domains) {
+      // Report the calculated domains without padding to make them more intuitive for users
+      const dataDomains = {
+        xMin: calculatedDomains.xMin,
+        xMax: calculatedDomains.xMax,
+        yMin: calculatedDomains.yMin,
+        yMax: calculatedDomains.yMax
+      };
+      
+      onDomainsChange(dataDomains);
+    }
+    
     // Calculate optimal axis intervals based on the data range and notify parent
     // Only perform this calculation when the graph is first loaded (no axisIntervals set yet)
     // or when domains change significantly
@@ -309,7 +325,7 @@ export default function DraggableGraph({
       // Only notify if the calculated intervals are different from current ones
       onAxisIntervalsChange(optimalIntervals);
     }
-  }, [calculatedDomains, data, onAxisIntervalsChange, axisIntervals]);
+  }, [calculatedDomains, data, onAxisIntervalsChange, axisIntervals, onDomainsChange, domains]);
 
   // Sync local rotation with prop when it changes externally
   useEffect(() => {
@@ -332,20 +348,21 @@ export default function DraggableGraph({
         yMax: domains.yMax
       });
       
+      // Preserve full precision of domain values
       if (domains.xMin !== undefined) {
-        setXAxisMin(domains.xMin.toString());
+        setXAxisMin(String(domains.xMin));
       }
       
       if (domains.xMax !== undefined) {
-        setXAxisMax(domains.xMax.toString());
+        setXAxisMax(String(domains.xMax));
       }
       
       if (domains.yMin !== undefined) {
-        setYAxisMin(domains.yMin.toString());
+        setYAxisMin(String(domains.yMin));
       }
       
       if (domains.yMax !== undefined) {
-        setYAxisMax(domains.yMax.toString());
+        setYAxisMax(String(domains.yMax));
       }
     }
   }, [domains]);

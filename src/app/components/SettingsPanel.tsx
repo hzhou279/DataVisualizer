@@ -7,6 +7,32 @@ interface SettingsPanelProps {
   onSettingsUpdate: (updatedProps: Partial<Graph>) => void;
 }
 
+// Helper function to format numbers with appropriate precision
+const formatNumber = (num: number): string => {
+  // For integers, return as is
+  if (Number.isInteger(num)) {
+    return num.toString();
+  }
+  
+  // For floats with many decimal places, use a reasonable precision
+  // that preserves significant digits without showing too many decimals
+  const absNum = Math.abs(num);
+  
+  if (absNum >= 1000) {
+    // Large numbers get fewer decimal places
+    return num.toPrecision(6);
+  } else if (absNum >= 1) {
+    // Medium sized numbers get standard precision
+    return num.toPrecision(8);
+  } else if (absNum >= 0.0001) {
+    // Small numbers get more precision
+    return num.toPrecision(8);
+  } else {
+    // Very small numbers get scientific notation
+    return num.toExponential(6);
+  }
+};
+
 export default function SettingsPanel({ graph, onClose, onSettingsUpdate }: SettingsPanelProps) {
   // Calculate actual data ranges from graph data using memoization
   const dataRanges = useMemo(() => {
@@ -91,10 +117,11 @@ export default function SettingsPanel({ graph, onClose, onSettingsUpdate }: Sett
       height: graph.size.height,
       rotation: graph.rotation,
       color: graph.color,
-      xMin: graph.domains?.xMin !== undefined ? graph.domains.xMin.toString() : '',
-      xMax: graph.domains?.xMax !== undefined ? graph.domains.xMax.toString() : '',
-      yMin: graph.domains?.yMin !== undefined ? graph.domains.yMin.toString() : '',
-      yMax: graph.domains?.yMax !== undefined ? graph.domains.yMax.toString() : '',
+      // Preserve full precision of domain values
+      xMin: graph.domains?.xMin !== undefined ? String(graph.domains.xMin) : '',
+      xMax: graph.domains?.xMax !== undefined ? String(graph.domains.xMax) : '',
+      yMin: graph.domains?.yMin !== undefined ? String(graph.domains.yMin) : '',
+      yMax: graph.domains?.yMax !== undefined ? String(graph.domains.yMax) : '',
       xIntervals: graph.axisIntervals?.x?.toString() || '5',
       yIntervals: graph.axisIntervals?.y?.toString() || '5',
       quadrantMode: graph.quadrantMode || 'first',
@@ -142,15 +169,38 @@ export default function SettingsPanel({ graph, onClose, onSettingsUpdate }: Sett
     }));
   };
 
+  // Reset domains to automatic calculation
+  const handleResetDomains = () => {
+    setLocalState(prev => ({
+      ...prev,
+      xMin: '',
+      xMax: '',
+      yMin: '',
+      yMax: ''
+    }));
+  };
+
   // Handle apply changes
   const handleApply = () => {
     const domains: any = {};
     
-    // Only include defined values for axis ranges
-    if (localState.xMin !== '') domains.xMin = parseFloat(localState.xMin);
-    if (localState.xMax !== '') domains.xMax = parseFloat(localState.xMax);
-    if (localState.yMin !== '') domains.yMin = parseFloat(localState.yMin);
-    if (localState.yMax !== '') domains.yMax = parseFloat(localState.yMax);
+    // Only include defined values for axis ranges - preserve exact values
+    if (localState.xMin !== '') {
+      // Use parseFloat directly to keep full precision
+      domains.xMin = parseFloat(localState.xMin);
+    }
+    
+    if (localState.xMax !== '') {
+      domains.xMax = parseFloat(localState.xMax);
+    }
+    
+    if (localState.yMin !== '') {
+      domains.yMin = parseFloat(localState.yMin);
+    }
+    
+    if (localState.yMax !== '') {
+      domains.yMax = parseFloat(localState.yMax);
+    }
     
     // Ensure we have valid interval values
     const axisIntervals = {
@@ -158,7 +208,7 @@ export default function SettingsPanel({ graph, onClose, onSettingsUpdate }: Sett
       y: Math.max(1, parseInt(localState.yIntervals) || 5)
     };
     
-    // Parse global coordinate and rotation center
+    // Parse global coordinate and rotation center - preserve exact values
     const globalCoordinate = {
       x: parseFloat(localState.globalX) || 0,
       y: parseFloat(localState.globalY) || 0
@@ -315,10 +365,10 @@ export default function SettingsPanel({ graph, onClose, onSettingsUpdate }: Sett
           <h4 className="font-medium text-sm mb-2 text-indigo-900">Data Range</h4>
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <p className="text-xs text-gray-600">X: [{dataRanges.xMin.toFixed(2)}, {dataRanges.xMax.toFixed(2)}]</p>
+              <p className="text-xs text-gray-600">X: [{formatNumber(dataRanges.xMin)}, {formatNumber(dataRanges.xMax)}]</p>
             </div>
             <div>
-              <p className="text-xs text-gray-600">Y: [{dataRanges.yMin.toFixed(2)}, {dataRanges.yMax.toFixed(2)}]</p>
+              <p className="text-xs text-gray-600">Y: [{formatNumber(dataRanges.yMin)}, {formatNumber(dataRanges.yMax)}]</p>
             </div>
           </div>
         </div>
@@ -336,7 +386,7 @@ export default function SettingsPanel({ graph, onClose, onSettingsUpdate }: Sett
                 value={localState.xMin}
                 onChange={handleInputChange}
                 className="w-full p-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-indigo-300 focus:border-indigo-500"
-                placeholder="Auto"
+                placeholder={`Auto (${formatNumber(dataRanges.xMin)})`}
               />
             </div>
             <div>
@@ -348,22 +398,31 @@ export default function SettingsPanel({ graph, onClose, onSettingsUpdate }: Sett
                 value={localState.xMax}
                 onChange={handleInputChange}
                 className="w-full p-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-indigo-300 focus:border-indigo-500"
-                placeholder="Auto"
+                placeholder={`Auto (${formatNumber(dataRanges.xMax)})`}
               />
             </div>
           </div>
-          <div className="mt-2">
-            <label htmlFor="xIntervals" className="block text-xs text-gray-500 mb-1">Intervals</label>
-            <input
-              type="number"
-              id="xIntervals"
-              name="xIntervals"
-              value={localState.xIntervals}
-              onChange={handleInputChange}
-              className="w-full p-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-indigo-300 focus:border-indigo-500"
-              min="2"
-              max="20"
-            />
+          <div className="flex justify-between items-center mt-2">
+            <div className="flex-1 mr-2">
+              <label htmlFor="xIntervals" className="block text-xs text-gray-500 mb-1">Intervals</label>
+              <input
+                type="number"
+                id="xIntervals"
+                name="xIntervals"
+                value={localState.xIntervals}
+                onChange={handleInputChange}
+                className="w-full p-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-indigo-300 focus:border-indigo-500"
+                min="2"
+                max="20"
+              />
+            </div>
+            <button 
+              onClick={handleResetDomains}
+              className="mt-4 px-2 py-1 bg-gray-200 rounded text-sm hover:bg-gray-300 whitespace-nowrap"
+              title="Reset to automatic domain calculation"
+            >
+              Reset Ranges
+            </button>
           </div>
         </div>
 
@@ -380,7 +439,7 @@ export default function SettingsPanel({ graph, onClose, onSettingsUpdate }: Sett
                 value={localState.yMin}
                 onChange={handleInputChange}
                 className="w-full p-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-indigo-300 focus:border-indigo-500"
-                placeholder="Auto"
+                placeholder={`Auto (${formatNumber(dataRanges.yMin)})`}
               />
             </div>
             <div>
@@ -392,7 +451,7 @@ export default function SettingsPanel({ graph, onClose, onSettingsUpdate }: Sett
                 value={localState.yMax}
                 onChange={handleInputChange}
                 className="w-full p-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-indigo-300 focus:border-indigo-500"
-                placeholder="Auto"
+                placeholder={`Auto (${formatNumber(dataRanges.yMax)})`}
               />
             </div>
           </div>
