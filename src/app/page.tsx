@@ -7,6 +7,8 @@ import { parseCSVData, validateCSVFormat, ParsedData } from './utils/csvParser';
 import SettingsPanel from './components/SettingsPanel';
 import DataPanel from './components/DataPanel';
 import GlobalCoordinateGrid, { GridContextProvider } from './components/GlobalCoordinateGrid';
+import ErrorBoundary from './components/ErrorBoundary';
+import TestErrorComponent from './components/TestErrorComponent';
 
 type QuadrantMode = 'first' | 'all';
 
@@ -328,37 +330,126 @@ export default function Home() {
   const selectedDataGraph = graphs.find(graph => graph.id === selectedDataGraphId);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-gray-100">
-      {/* Main content area */}
-      <div className="flex-1 flex flex-col min-h-0">
-        {/* Header with controls */}
-        <div className="flex justify-between items-center p-3 bg-white border-b">
-          <div className="flex items-center space-x-6">
-            <div>
-              <h1 className="text-xl font-semibold text-gray-900">CSV Graph Visualizer</h1>
-              <p className="text-sm text-gray-500">Upload CSV files to visualize data</p>
+    <ErrorBoundary
+      fallback={
+        <div className="flex h-screen items-center justify-center bg-gray-100">
+          <div className="p-6 max-w-sm bg-white rounded-lg border border-gray-200 shadow-md">
+            <div className="flex items-center mb-4">
+              <svg className="w-10 h-10 text-red-500 mr-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <h2 className="text-xl font-bold">Something went wrong</h2>
             </div>
-            <button 
-              onClick={() => setShowGrid(!showGrid)}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                showGrid ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600'
-              }`}
+            <p className="text-gray-700 mb-4">The application encountered an error. Please try refreshing the page.</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
             >
-              {showGrid ? 'Hide Grid' : 'Show Grid'}
+              Refresh Page
             </button>
           </div>
-          <div className="w-52">
-            <FileUploader onDataParsed={handleFileProcessed} />
-          </div>
         </div>
+      }
+      onError={(error, errorInfo) => {
+        console.error("Application Error:", error);
+        console.error("Component Stack:", errorInfo.componentStack);
+      }}
+    >
+      <div className="flex h-screen overflow-hidden bg-gray-100">
+        {/* Main content area */}
+        <div className="flex-1 flex flex-col min-h-0">
+          {/* Header with controls */}
+          <div className="flex justify-between items-center p-3 bg-white border-b">
+            <div className="flex items-center space-x-6">
+              <div>
+                <h1 className="text-xl font-semibold text-gray-900">CSV Graph Visualizer</h1>
+                <p className="text-sm text-gray-500">Upload CSV files to visualize data</p>
+              </div>
+              <button 
+                onClick={() => setShowGrid(!showGrid)}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                  showGrid ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600'
+                }`}
+              >
+                {showGrid ? 'Hide Grid' : 'Show Grid'}
+              </button>
+              
+              {/* Error test component in its own error boundary */}
+              <ErrorBoundary>
+                <TestErrorComponent />
+              </ErrorBoundary>
+            </div>
+            <div className="w-52">
+              <FileUploader onDataParsed={handleFileProcessed} />
+            </div>
+          </div>
 
-        {/* White board container - maximized size */}
-        <div className="flex-1 bg-white relative overflow-hidden min-h-0" id="grid-container">
-          {/* Global coordinate grid - taking full space */}
-          <div className="absolute inset-0 w-full h-full" style={{ zIndex: 1 }}>
-            {showGrid && (
-              <GlobalCoordinateGrid gridSize={gridSize} showLabels={showGridLabels}>
-                {/* Graphs container */}
+          {/* White board container - maximized size */}
+          <div className="flex-1 bg-white relative overflow-hidden min-h-0" id="grid-container">
+            {/* Global coordinate grid - taking full space */}
+            <div className="absolute inset-0 w-full h-full" style={{ zIndex: 1 }}>
+              {showGrid && (
+                <GlobalCoordinateGrid gridSize={gridSize} showLabels={showGridLabels}>
+                  {/* Graphs container */}
+                  <div className="relative h-full" style={{ zIndex: 2 }}>
+                    {graphs.length > 0 ? (
+                      graphs.map((graph) => (
+                        <DraggableGraph
+                          key={graph.id}
+                          {...graph}
+                          filename={graph.title}
+                          zIndex={graph.zIndex || 100}
+                          onPositionChange={(x, y) => handlePositionUpdate(graph.id, x, y)}
+                          onSizeChange={(width, height) => handleSizeUpdate(graph.id, width, height)}
+                          onRotationChange={(rotation) => handleRotationUpdate(graph.id, rotation)}
+                          onColorChange={(color) => handleColorChange(graph.id, color)}
+                          onAxisIntervalsChange={(intervals) => handleAxisIntervalsUpdate(graph.id, intervals)}
+                          onDomainsChange={(domains) => handleDomainsUpdate(graph.id, domains)}
+                          onRemove={() => handleRemoveGraph(graph.id)}
+                          isSettingsOpen={selectedGraphId === graph.id}
+                          onToggleSettings={() => {
+                            if (selectedGraphId === graph.id) {
+                              setSelectedGraphId(null);
+                              setShowSettings(false);
+                            } else {
+                              setSelectedGraphId(graph.id);
+                              setShowSettings(true);
+                              if (selectedDataGraphId !== graph.id) {
+                                setSelectedDataGraphId(null);
+                              }
+                            }
+                          }}
+                          onDataPanelToggle={() => {
+                            if (selectedDataGraphId === graph.id) {
+                              setSelectedDataGraphId(null);
+                            } else {
+                              setSelectedDataGraphId(graph.id);
+                              if (selectedGraphId !== graph.id) {
+                                setSelectedGraphId(null);
+                              }
+                            }
+                          }}
+                          onClick={() => handleGraphClick(graph.id)}
+                          snapToGrid={graph.settings?.snapToGrid !== false}
+                        />
+                      ))
+                    ) : (
+                      <div className="flex items-center justify-center h-full">
+                        <div className="text-center">
+                          <div className="bg-blue-50 p-6 rounded-full inline-block mb-4">
+                            <svg className="h-12 w-12 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                          </div>
+                          <h3 className="text-lg font-medium text-gray-900">No graphs yet</h3>
+                          <p className="text-gray-500 mt-1">Upload a CSV file to get started</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </GlobalCoordinateGrid>
+              )}
+              {!showGrid && (
                 <div className="relative h-full" style={{ zIndex: 2 }}>
                   {graphs.length > 0 ? (
                     graphs.map((graph) => (
@@ -398,7 +489,7 @@ export default function Home() {
                           }
                         }}
                         onClick={() => handleGraphClick(graph.id)}
-                        snapToGrid={graph.settings?.snapToGrid !== false}
+                        snapToGrid={false}
                       />
                     ))
                   ) : (
@@ -415,92 +506,34 @@ export default function Home() {
                     </div>
                   )}
                 </div>
-              </GlobalCoordinateGrid>
-            )}
-            {!showGrid && (
-              <div className="relative h-full" style={{ zIndex: 2 }}>
-                {graphs.length > 0 ? (
-                  graphs.map((graph) => (
-                    <DraggableGraph
-                      key={graph.id}
-                      {...graph}
-                      filename={graph.title}
-                      zIndex={graph.zIndex || 100}
-                      onPositionChange={(x, y) => handlePositionUpdate(graph.id, x, y)}
-                      onSizeChange={(width, height) => handleSizeUpdate(graph.id, width, height)}
-                      onRotationChange={(rotation) => handleRotationUpdate(graph.id, rotation)}
-                      onColorChange={(color) => handleColorChange(graph.id, color)}
-                      onAxisIntervalsChange={(intervals) => handleAxisIntervalsUpdate(graph.id, intervals)}
-                      onDomainsChange={(domains) => handleDomainsUpdate(graph.id, domains)}
-                      onRemove={() => handleRemoveGraph(graph.id)}
-                      isSettingsOpen={selectedGraphId === graph.id}
-                      onToggleSettings={() => {
-                        if (selectedGraphId === graph.id) {
-                          setSelectedGraphId(null);
-                          setShowSettings(false);
-                        } else {
-                          setSelectedGraphId(graph.id);
-                          setShowSettings(true);
-                          if (selectedDataGraphId !== graph.id) {
-                            setSelectedDataGraphId(null);
-                          }
-                        }
-                      }}
-                      onDataPanelToggle={() => {
-                        if (selectedDataGraphId === graph.id) {
-                          setSelectedDataGraphId(null);
-                        } else {
-                          setSelectedDataGraphId(graph.id);
-                          if (selectedGraphId !== graph.id) {
-                            setSelectedGraphId(null);
-                          }
-                        }
-                      }}
-                      onClick={() => handleGraphClick(graph.id)}
-                      snapToGrid={false}
-                    />
-                  ))
-                ) : (
-                  <div className="flex items-center justify-center h-full">
-                    <div className="text-center">
-                      <div className="bg-blue-50 p-6 rounded-full inline-block mb-4">
-                        <svg className="h-12 w-12 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                        </svg>
-                      </div>
-                      <h3 className="text-lg font-medium text-gray-900">No graphs yet</h3>
-                      <p className="text-gray-500 mt-1">Upload a CSV file to get started</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Side panels */}
-      <div className={`fixed left-0 top-0 h-full w-80 bg-white border-r shadow-xl transform transition-transform duration-300 z-50 ${selectedDataGraphId ? 'translate-x-0' : '-translate-x-full'}`}>
-        {selectedDataGraph && (
-          <DataPanel 
-            graph={selectedDataGraph}
-            onDataUpdate={handleDataUpdate}
-            onClose={() => setSelectedDataGraphId(null)}
-          />
-        )}
-      </div>
-      
-      <div className={`fixed right-0 top-0 h-full w-80 bg-white border-l shadow-xl transform transition-transform duration-300 z-50 ${showSettings ? 'translate-x-0' : 'translate-x-full'}`}>
-        {showSettings && selectedGraph && (
-          <GridContextProvider gridSize={gridSize}>
-            <SettingsPanel 
-              graph={selectedGraph} 
-              onSettingsUpdate={handleSettingsUpdate}
-              onClose={handleSettingsClose}
+        {/* Side panels */}
+        <div className={`fixed left-0 top-0 h-full w-80 bg-white border-r shadow-xl transform transition-transform duration-300 z-50 ${selectedDataGraphId ? 'translate-x-0' : '-translate-x-full'}`}>
+          {selectedDataGraph && (
+            <DataPanel 
+              graph={selectedDataGraph}
+              onDataUpdate={handleDataUpdate}
+              onClose={() => setSelectedDataGraphId(null)}
             />
-          </GridContextProvider>
-        )}
+          )}
+        </div>
+        
+        <div className={`fixed right-0 top-0 h-full w-80 bg-white border-l shadow-xl transform transition-transform duration-300 z-50 ${showSettings ? 'translate-x-0' : 'translate-x-full'}`}>
+          {showSettings && selectedGraph && (
+            <GridContextProvider gridSize={gridSize}>
+              <SettingsPanel 
+                graph={selectedGraph} 
+                onSettingsUpdate={handleSettingsUpdate}
+                onClose={handleSettingsClose}
+              />
+            </GridContextProvider>
+          )}
+        </div>
       </div>
-    </div>
+    </ErrorBoundary>
   );
 }

@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo, useCallback } from 'react';
 import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import React from 'react';
 import { useGridSystem } from './GlobalCoordinateGrid';
+import ErrorBoundary from './ErrorBoundary';
 
 interface DraggableGraphProps {
   data: any[];
@@ -793,398 +794,428 @@ export default function DraggableGraph({
     document.addEventListener('mouseup', onMouseUp);
   }
 
+  // Return the component with error boundary
   return (
-    <div 
-      ref={containerRef}
-      style={containerStyle} 
-      className="graph-container"
-      onClick={(e) => {
-        // Prevent propagation to avoid interactions with parent elements
-        e.stopPropagation();
-        // Call the onClick handler if provided
-        if (onClick) onClick();
-      }}
-    >
-      <div className="bg-transparent border border-black rounded-lg h-full flex flex-col overflow-hidden">
-        {/* Header with semi-transparent background */}
+    <ErrorBoundary
+      fallback={
         <div 
-          className={`handle bg-white bg-opacity-80 p-2 border-b border-gray-200 flex justify-between items-center cursor-move ${isMinimized ? 'rounded-lg' : ''}`}
-          onMouseDown={(e) => handleDrag(e, 'move')}
-          onDoubleClick={() => {
-            if (isMinimized) {
-              setIsMinimized(false);
-            }
+          className="absolute border-2 border-red-400 bg-red-50 rounded-md shadow-md p-4 overflow-hidden"
+          style={{
+            left: `${position.x}px`,
+            top: `${position.y}px`,
+            width: `${size.width}px`,
+            height: `${size.height}px`,
+            zIndex,
           }}
         >
-          {/* Drag handle area */}
-          <div className={`flex-1 h-full flex items-center ${isMinimized ? 'mr-1' : 'mr-2'}`}>
-            <div className="mr-2 text-gray-400 hover:text-gray-600">
-              <svg 
-                className="w-4 h-4" 
-                fill="none" 
-                stroke="currentColor" 
-                viewBox="0 0 24 24"
-              >
-                <path 
-                  strokeLinecap="round" 
-                  strokeLinejoin="round" 
-                  strokeWidth="2" 
-                  d="M4 6h16M4 12h16M4 18h16"
-                />
+          <div className="flex justify-between items-center mb-2">
+            <h3 className="text-red-800 text-sm font-medium">Error in Graph: {filename}</h3>
+            <button
+              onClick={onRemove}
+              className="p-1 hover:bg-red-200 rounded"
+              aria-label="Remove graph"
+            >
+              <svg className="w-4 h-4 text-red-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
-            </div>
-            <h3 className="font-medium text-gray-800 truncate text-sm">
-              {filename || 'Data Graph'} {!isMinimized && `(${localRotation.toFixed(1)}°)`}
-            </h3>
+            </button>
           </div>
-          
-          {/* Display position coordinates in the header */}
-          {!isMinimized && (
-            <div className="text-xs text-gray-500 mr-2">
-              {`Pos: (${Math.round(position.x + (globalCoordinate?.x || 0))}, ${Math.round(position.y + (globalCoordinate?.y || 0))})`}
-            </div>
-          )}
-          
-          {/* Controls */}
-          <div className={`flex ${isMinimized ? 'space-x-0.5' : 'space-x-1'} z-10`}>
-            {/* Rotation control - only visible when not minimized */}
-            {!isMinimized && (
-              <div 
-                className="relative w-8 h-8 cursor-grab active:cursor-grabbing rounded hover:bg-blue-100 flex items-center justify-center"
-                onMouseDown={handleRotate}
-                title="Drag to rotate"
-              >
+          <p className="text-xs text-red-700">This graph encountered an error. You can remove it and try again.</p>
+        </div>
+      }
+    >
+      <div 
+        ref={containerRef}
+        style={containerStyle} 
+        className="graph-container"
+        onClick={(e) => {
+          // Prevent propagation to avoid interactions with parent elements
+          e.stopPropagation();
+          // Call the onClick handler if provided
+          if (onClick) onClick();
+        }}
+      >
+        <div className="bg-transparent border border-black rounded-lg h-full flex flex-col overflow-hidden">
+          {/* Header with semi-transparent background */}
+          <div 
+            className={`handle bg-white bg-opacity-80 p-2 border-b border-gray-200 flex justify-between items-center cursor-move ${isMinimized ? 'rounded-lg' : ''}`}
+            onMouseDown={(e) => handleDrag(e, 'move')}
+            onDoubleClick={() => {
+              if (isMinimized) {
+                setIsMinimized(false);
+              }
+            }}
+          >
+            {/* Drag handle area */}
+            <div className={`flex-1 h-full flex items-center ${isMinimized ? 'mr-1' : 'mr-2'}`}>
+              <div className="mr-2 text-gray-400 hover:text-gray-600">
                 <svg 
-                  className="w-5 h-5 text-blue-500 hover:text-blue-600 transition-colors"
+                  className="w-4 h-4" 
                   fill="none" 
-                  viewBox="0 0 24 24" 
-                  stroke="currentColor"
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
                 >
                   <path 
                     strokeLinecap="round" 
                     strokeLinejoin="round" 
                     strokeWidth="2" 
-                    d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122"
+                    d="M4 6h16M4 12h16M4 18h16"
                   />
                 </svg>
-                <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded shadow-lg opacity-0 group-hover:opacity-100 pointer-events-none">
-                  {localRotation.toFixed(1)}°
-                </div>
+              </div>
+              <h3 className="font-medium text-gray-800 truncate text-sm">
+                {filename || 'Data Graph'} {!isMinimized && `(${localRotation.toFixed(1)}°)`}
+              </h3>
+            </div>
+            
+            {/* Display position coordinates in the header */}
+            {!isMinimized && (
+              <div className="text-xs text-gray-500 mr-2">
+                {`Pos: (${Math.round(position.x + (globalCoordinate?.x || 0))}, ${Math.round(position.y + (globalCoordinate?.y || 0))})`}
               </div>
             )}
             
-            {/* Data edit button - only visible when not minimized */}
-            {!isMinimized && (
+            {/* Controls */}
+            <div className={`flex ${isMinimized ? 'space-x-0.5' : 'space-x-1'} z-10`}>
+              {/* Rotation control - only visible when not minimized */}
+              {!isMinimized && (
+                <div 
+                  className="relative w-8 h-8 cursor-grab active:cursor-grabbing rounded hover:bg-blue-100 flex items-center justify-center"
+                  onMouseDown={handleRotate}
+                  title="Drag to rotate"
+                >
+                  <svg 
+                    className="w-5 h-5 text-blue-500 hover:text-blue-600 transition-colors"
+                    fill="none" 
+                    viewBox="0 0 24 24" 
+                    stroke="currentColor"
+                  >
+                    <path 
+                      strokeLinecap="round" 
+                      strokeLinejoin="round" 
+                      strokeWidth="2" 
+                      d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122"
+                    />
+                  </svg>
+                  <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded shadow-lg opacity-0 group-hover:opacity-100 pointer-events-none">
+                    {localRotation.toFixed(1)}°
+                  </div>
+                </div>
+              )}
+              
+              {/* Data edit button - only visible when not minimized */}
+              {!isMinimized && (
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDataPanelToggle();
+                  }}
+                  className="p-1 text-indigo-500 hover:text-indigo-700 rounded bg-white"
+                  title="Edit Data"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 7v10c0 2 1 3 3 3h10c2 0 3-1 3-3V7c0-2-1-3-3-3H7c-2 0-3 1-3 3zm0 5h16" />
+                  </svg>
+                </button>
+              )}
+
+              {/* Minimize/Maximize button - always visible */}
               <button 
                 onClick={(e) => {
                   e.stopPropagation();
-                  onDataPanelToggle();
+                  setIsMinimized(!isMinimized);
                 }}
-                className="p-1 text-indigo-500 hover:text-indigo-700 rounded bg-white"
-                title="Edit Data"
+                className={`${isMinimized ? 'p-0.5' : 'p-1'} text-gray-500 hover:text-gray-700 rounded bg-white`}
+                title={isMinimized ? "Restore" : "Minimize"}
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 7v10c0 2 1 3 3 3h10c2 0 3-1 3-3V7c0-2-1-3-3-3H7c-2 0-3 1-3 3zm0 5h16" />
+                  {isMinimized ? (
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                  ) : (
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 12H4" />
+                  )}
                 </svg>
               </button>
-            )}
-
-            {/* Minimize/Maximize button - always visible */}
-            <button 
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsMinimized(!isMinimized);
-              }}
-              className={`${isMinimized ? 'p-0.5' : 'p-1'} text-gray-500 hover:text-gray-700 rounded bg-white`}
-              title={isMinimized ? "Restore" : "Minimize"}
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                {isMinimized ? (
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-                ) : (
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 12H4" />
-                )}
-              </svg>
-            </button>
-            
-            {/* Settings button - always visible */}
-            <button 
-              onClick={handleSettingsButtonClick}
-              data-active={isSettingsOpen ? "true" : "false"}
-              className={`${isMinimized ? 'p-0.5' : 'p-1'} rounded transition-colors duration-100 ${
-                isSettingsOpen 
-                  ? 'bg-blue-500 text-white hover:bg-blue-600 shadow-sm' 
-                  : 'bg-white text-gray-500 hover:text-gray-700 hover:bg-gray-100'
-              }`}
-              title={isSettingsOpen ? "Close Settings" : "Open Settings"}
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-            </button>
-            
-            {/* Close button - always visible */}
-            <button 
-              onClick={(e) => {
-                e.stopPropagation();
-                onRemove();
-              }}
-              className={`${isMinimized ? 'p-0.5' : 'p-1'} text-red-500 hover:text-red-700 rounded bg-white`}
-              title="Close graph"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
+              
+              {/* Settings button - always visible */}
+              <button 
+                onClick={handleSettingsButtonClick}
+                data-active={isSettingsOpen ? "true" : "false"}
+                className={`${isMinimized ? 'p-0.5' : 'p-1'} rounded transition-colors duration-100 ${
+                  isSettingsOpen 
+                    ? 'bg-blue-500 text-white hover:bg-blue-600 shadow-sm' 
+                    : 'bg-white text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                }`}
+                title={isSettingsOpen ? "Close Settings" : "Open Settings"}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </button>
+              
+              {/* Close button - always visible */}
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRemove();
+                }}
+                className={`${isMinimized ? 'p-0.5' : 'p-1'} text-red-500 hover:text-red-700 rounded bg-white`}
+                title="Close graph"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
           </div>
+          
+          {/* Graph content with transparent background */}
+          {!isMinimized && (
+            <div 
+              className="flex-1 p-2 relative flex flex-col" 
+              style={{ 
+                minHeight: 0, 
+                height: "calc(100% - 32px)",  // Subtract header height to ensure proper sizing
+                backgroundColor: "transparent" // Completely transparent background
+              }}
+            >
+              <ResponsiveContainer 
+                key={chartKey}
+                width="100%" 
+                height="100%"
+                debounce={50}
+                minHeight={50}
+                aspect={undefined}
+                onResize={(width, height) => {
+                  if (width && height) {
+                    setContentSize({ width, height });
+                    console.log(`Content resized to: ${width}x${height}`);
+                  }
+                }}
+              >
+                <ScatterChart 
+                  margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
+                  style={{ background: "transparent" }} // Make chart background transparent
+                >
+                  {/* Simplified CartesianGrid approach to eliminate rendering issues */}
+                  <CartesianGrid 
+                    stroke="rgba(0,0,0,0.15)" 
+                    strokeDasharray="0"
+                    strokeWidth={data && data.length > 1000 ? 0.5 : 1}
+                  />
+                  <XAxis 
+                    type="number" 
+                    dataKey="x" 
+                    xAxisId={0}
+                    domain={[scaledDomains.xMin ?? 0, scaledDomains.xMax ?? 100]} 
+                    allowDataOverflow={false}
+                    includeHidden={true}
+                    allowDecimals={true}
+                    // Generate nice ticks for better readability
+                    ticks={(() => {
+                      const min = scaledDomains.xMin ?? 0;
+                      const max = scaledDomains.xMax ?? 100;
+                      
+                      // Use axisIntervals prop instead of fixed count
+                      const intervalCount = axisIntervals?.x || 5; // Default to 5 intervals if not provided
+                      
+                      // Generate exactly intervalCount+1 ticks for intervalCount intervals
+                      if (intervalCount <= 1) {
+                        return [min, max]; // Minimum 2 ticks (1 interval)
+                      }
+                      
+                      // Calculate exact step size without rounding to ensure exact interval count
+                      const exactStepSize = (max - min) / intervalCount;
+                      
+                      // Generate ticks with exact interval count
+                      const ticks = [];
+                      for (let i = 0; i <= intervalCount; i++) {
+                        const value = min + (exactStepSize * i);
+                        ticks.push(parseFloat(value.toFixed(10))); // Fix floating point precision issues
+                      }
+                      
+                      return ticks;
+                    })()}
+                    padding={{ left: 0, right: 0 }}
+                    axisLine={{ stroke: '#000', strokeWidth: 1.5 }}
+                    scale="linear"
+                    // Remove interval specification to avoid conflict with ticks
+                    // Reduce font size for better performance with large datasets
+                    tick={{ fontSize: data && data.length > 1000 ? 10 : 12 }}
+                    // Format ticks to avoid long decimal values
+                    tickFormatter={(value) => {
+                      // For integers or values close to integers
+                      if (Math.abs(value - Math.round(value)) < 0.001) {
+                        return Math.round(value).toString();
+                      }
+                      // For other values, limit decimal places
+                      return value.toFixed(1);
+                    }}
+                  />
+                  <YAxis 
+                    type="number"
+                    dataKey="y"
+                    yAxisId={0}
+                    domain={[scaledDomains.yMin ?? 0, scaledDomains.yMax ?? 100]}
+                    allowDataOverflow={false}
+                    includeHidden={true}
+                    allowDecimals={true}
+                    // Generate nice ticks for better readability
+                    ticks={(() => {
+                      const min = scaledDomains.yMin ?? 0;
+                      const max = scaledDomains.yMax ?? 100;
+                      
+                      // Use axisIntervals prop instead of fixed count
+                      const intervalCount = axisIntervals?.y || 5; // Default to 5 intervals if not provided
+                      
+                      // Generate exactly intervalCount+1 ticks for intervalCount intervals
+                      if (intervalCount <= 1) {
+                        return [min, max]; // Minimum 2 ticks (1 interval)
+                      }
+                      
+                      // Calculate exact step size without rounding to ensure exact interval count
+                      const exactStepSize = (max - min) / intervalCount;
+                      
+                      // Generate ticks with exact interval count
+                      const ticks = [];
+                      for (let i = 0; i <= intervalCount; i++) {
+                        const value = min + (exactStepSize * i);
+                        ticks.push(parseFloat(value.toFixed(10))); // Fix floating point precision issues
+                      }
+                      
+                      return ticks;
+                    })()}
+                    padding={{ top: 0, bottom: 0 }}
+                    axisLine={{ stroke: '#000', strokeWidth: 1.5 }}
+                    scale="linear"
+                    // Reduce font size for better performance with large datasets
+                    tick={{ fontSize: data && data.length > 1000 ? 10 : 12 }}
+                    // Format ticks to avoid long decimal values
+                    tickFormatter={(value) => {
+                      // For integers or values close to integers
+                      if (Math.abs(value - Math.round(value)) < 0.001) {
+                        return Math.round(value).toString();
+                      }
+                      // For other values, limit decimal places
+                      return value.toFixed(1);
+                    }}
+                  />
+                  <Tooltip 
+                    contentStyle={{ backgroundColor: 'white', borderRadius: '4px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }}
+                    // Throttle tooltip updates for better performance with large datasets
+                    isAnimationActive={data ? data.length <= 500 : true}
+                    cursor={{ strokeDasharray: '3 3', stroke: 'rgba(50,50,50,0.4)' }}
+                    // Custom content renderer for better performance
+                    content={({ active, payload }) => {
+                      if (!active || !payload || !payload.length) {
+                        return null;
+                      }
+                      
+                      // Simple lightweight tooltip for large datasets
+                      const point = payload[0].payload;
+                      return (
+                        <div className="custom-tooltip" style={{
+                          backgroundColor: 'white',
+                          padding: '8px 12px',
+                          border: '1px solid #ccc',
+                          borderRadius: '4px',
+                          boxShadow: '0 2px 5px rgba(0,0,0,0.1)'
+                        }}>
+                          <p className="tooltip-x"><strong>X:</strong> {point.x}</p>
+                          <p className="tooltip-y"><strong>Y:</strong> {point.y}</p>
+                        </div>
+                      );
+                    }}
+                  />
+                  <Scatter 
+                    name="Data Points"
+                    data={processedData}
+                    fill={color}
+                    stroke={color}
+                    strokeWidth={2}
+                    fillOpacity={0.8}
+                    strokeOpacity={0.9}
+                    shape={(props: any) => {
+                      // Custom shape for optimal performance
+                      const { cx, cy } = props;
+                      return (
+                        <circle 
+                          cx={cx} 
+                          cy={cy} 
+                          r={renderStrategy.pointSize} 
+                          fill={color}
+                          fillOpacity={0.8}
+                          stroke={color}
+                          strokeWidth={1.5}
+                          strokeOpacity={0.9}
+                        />
+                      );
+                    }}
+                  />
+                  {/* Filter for glow effect */}
+                  <defs>
+                    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+                      <feGaussianBlur stdDeviation="2" result="blur" />
+                      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                    </filter>
+                  </defs>
+                  {quadrantMode === 'all' && (
+                    <>
+                      <ReferenceLine x={0} stroke="rgba(0,0,0,0.5)" strokeWidth={1} ifOverflow="extendDomain" />
+                      <ReferenceLine y={0} stroke="rgba(0,0,0,0.5)" strokeWidth={1} ifOverflow="extendDomain" />
+                    </>
+                  )}
+                </ScatterChart>
+              </ResponsiveContainer>
+            </div>
+          )}
         </div>
         
-        {/* Graph content with transparent background */}
+        {/* Resize Handlers */}
         {!isMinimized && (
+          <>
+            <div className="absolute top-0 left-0 w-full h-4 cursor-ns-resize resize-handle" 
+                 onMouseDown={(e) => handleDrag(e, 'top')}></div>
+            <div className="absolute top-0 right-0 w-4 h-4 cursor-nesw-resize resize-handle" 
+                 onMouseDown={(e) => handleDrag(e, 'topRight')}></div>
+            <div className="absolute bottom-0 left-0 w-full h-4 cursor-ns-resize resize-handle" 
+                 onMouseDown={(e) => handleDrag(e, 'bottom')}></div>
+            <div className="absolute top-0 left-0 h-full w-4 cursor-ew-resize resize-handle" 
+                 onMouseDown={(e) => handleDrag(e, 'left')}></div>
+            <div className="absolute top-0 right-0 h-full w-4 cursor-ew-resize resize-handle" 
+                 onMouseDown={(e) => handleDrag(e, 'right')}></div>
+            <div className="absolute bottom-0 right-0 w-4 h-4 cursor-nwse-resize resize-handle" 
+                 onMouseDown={(e) => handleDrag(e, 'bottomRight')}></div>
+            <div className="absolute bottom-0 left-0 w-4 h-4 cursor-nesw-resize resize-handle" 
+                 onMouseDown={(e) => handleDrag(e, 'bottomLeft')}></div>
+            <div className="absolute top-0 left-0 w-4 h-4 cursor-nwse-resize resize-handle" 
+                 onMouseDown={(e) => handleDrag(e, 'topLeft')}></div>
+          </>
+        )}
+        
+        {/* Coordinate tooltip - shows when dragging */}
+        {showCoordinateTooltip && (
           <div 
-            className="flex-1 p-2 relative flex flex-col" 
-            style={{ 
-              minHeight: 0, 
-              height: "calc(100% - 32px)",  // Subtract header height to ensure proper sizing
-              backgroundColor: "transparent" // Completely transparent background
+            style={{
+              position: 'absolute',
+              top: '-40px',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              backgroundColor: 'rgba(30, 58, 138, 0.9)',
+              color: 'white',
+              padding: '4px 8px',
+              borderRadius: '4px',
+              fontSize: '12px',
+              fontWeight: 'bold',
+              whiteSpace: 'nowrap',
+              zIndex: 1000
             }}
           >
-            <ResponsiveContainer 
-              key={chartKey}
-              width="100%" 
-              height="100%"
-              debounce={50}
-              minHeight={50}
-              aspect={undefined}
-              onResize={(width, height) => {
-                if (width && height) {
-                  setContentSize({ width, height });
-                  console.log(`Content resized to: ${width}x${height}`);
-                }
-              }}
-            >
-              <ScatterChart 
-                margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
-                style={{ background: "transparent" }} // Make chart background transparent
-              >
-                {/* Simplified CartesianGrid approach to eliminate rendering issues */}
-                <CartesianGrid 
-                  stroke="rgba(0,0,0,0.15)" 
-                  strokeDasharray="0"
-                  strokeWidth={data && data.length > 1000 ? 0.5 : 1}
-                />
-                <XAxis 
-                  type="number" 
-                  dataKey="x" 
-                  xAxisId={0}
-                  domain={[scaledDomains.xMin ?? 0, scaledDomains.xMax ?? 100]} 
-                  allowDataOverflow={false}
-                  includeHidden={true}
-                  allowDecimals={true}
-                  // Generate nice ticks for better readability
-                  ticks={(() => {
-                    const min = scaledDomains.xMin ?? 0;
-                    const max = scaledDomains.xMax ?? 100;
-                    
-                    // Use axisIntervals prop instead of fixed count
-                    const intervalCount = axisIntervals?.x || 5; // Default to 5 intervals if not provided
-                    
-                    // Generate exactly intervalCount+1 ticks for intervalCount intervals
-                    if (intervalCount <= 1) {
-                      return [min, max]; // Minimum 2 ticks (1 interval)
-                    }
-                    
-                    // Calculate exact step size without rounding to ensure exact interval count
-                    const exactStepSize = (max - min) / intervalCount;
-                    
-                    // Generate ticks with exact interval count
-                    const ticks = [];
-                    for (let i = 0; i <= intervalCount; i++) {
-                      const value = min + (exactStepSize * i);
-                      ticks.push(parseFloat(value.toFixed(10))); // Fix floating point precision issues
-                    }
-                    
-                    return ticks;
-                  })()}
-                  padding={{ left: 0, right: 0 }}
-                  axisLine={{ stroke: '#000', strokeWidth: 1.5 }}
-                  scale="linear"
-                  // Remove interval specification to avoid conflict with ticks
-                  // Reduce font size for better performance with large datasets
-                  tick={{ fontSize: data && data.length > 1000 ? 10 : 12 }}
-                  // Format ticks to avoid long decimal values
-                  tickFormatter={(value) => {
-                    // For integers or values close to integers
-                    if (Math.abs(value - Math.round(value)) < 0.001) {
-                      return Math.round(value).toString();
-                    }
-                    // For other values, limit decimal places
-                    return value.toFixed(1);
-                  }}
-                />
-                <YAxis 
-                  type="number"
-                  dataKey="y"
-                  yAxisId={0}
-                  domain={[scaledDomains.yMin ?? 0, scaledDomains.yMax ?? 100]}
-                  allowDataOverflow={false}
-                  includeHidden={true}
-                  allowDecimals={true}
-                  // Generate nice ticks for better readability
-                  ticks={(() => {
-                    const min = scaledDomains.yMin ?? 0;
-                    const max = scaledDomains.yMax ?? 100;
-                    
-                    // Use axisIntervals prop instead of fixed count
-                    const intervalCount = axisIntervals?.y || 5; // Default to 5 intervals if not provided
-                    
-                    // Generate exactly intervalCount+1 ticks for intervalCount intervals
-                    if (intervalCount <= 1) {
-                      return [min, max]; // Minimum 2 ticks (1 interval)
-                    }
-                    
-                    // Calculate exact step size without rounding to ensure exact interval count
-                    const exactStepSize = (max - min) / intervalCount;
-                    
-                    // Generate ticks with exact interval count
-                    const ticks = [];
-                    for (let i = 0; i <= intervalCount; i++) {
-                      const value = min + (exactStepSize * i);
-                      ticks.push(parseFloat(value.toFixed(10))); // Fix floating point precision issues
-                    }
-                    
-                    return ticks;
-                  })()}
-                  padding={{ top: 0, bottom: 0 }}
-                  axisLine={{ stroke: '#000', strokeWidth: 1.5 }}
-                  scale="linear"
-                  // Reduce font size for better performance with large datasets
-                  tick={{ fontSize: data && data.length > 1000 ? 10 : 12 }}
-                  // Format ticks to avoid long decimal values
-                  tickFormatter={(value) => {
-                    // For integers or values close to integers
-                    if (Math.abs(value - Math.round(value)) < 0.001) {
-                      return Math.round(value).toString();
-                    }
-                    // For other values, limit decimal places
-                    return value.toFixed(1);
-                  }}
-                />
-                <Tooltip 
-                  contentStyle={{ backgroundColor: 'white', borderRadius: '4px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }}
-                  // Throttle tooltip updates for better performance with large datasets
-                  isAnimationActive={data ? data.length <= 500 : true}
-                  cursor={{ strokeDasharray: '3 3', stroke: 'rgba(50,50,50,0.4)' }}
-                  // Custom content renderer for better performance
-                  content={({ active, payload }) => {
-                    if (!active || !payload || !payload.length) {
-                      return null;
-                    }
-                    
-                    // Simple lightweight tooltip for large datasets
-                    const point = payload[0].payload;
-                    return (
-                      <div className="custom-tooltip" style={{
-                        backgroundColor: 'white',
-                        padding: '8px 12px',
-                        border: '1px solid #ccc',
-                        borderRadius: '4px',
-                        boxShadow: '0 2px 5px rgba(0,0,0,0.1)'
-                      }}>
-                        <p className="tooltip-x"><strong>X:</strong> {point.x}</p>
-                        <p className="tooltip-y"><strong>Y:</strong> {point.y}</p>
-                      </div>
-                    );
-                  }}
-                />
-                <Scatter 
-                  name="Data Points"
-                  data={processedData}
-                  fill={color}
-                  stroke={color}
-                  strokeWidth={2}
-                  fillOpacity={0.8}
-                  strokeOpacity={0.9}
-                  shape={(props: any) => {
-                    // Custom shape for optimal performance
-                    const { cx, cy } = props;
-                    return (
-                      <circle 
-                        cx={cx} 
-                        cy={cy} 
-                        r={renderStrategy.pointSize} 
-                        fill={color}
-                        fillOpacity={0.8}
-                        stroke={color}
-                        strokeWidth={1.5}
-                        strokeOpacity={0.9}
-                      />
-                    );
-                  }}
-                />
-                {/* Filter for glow effect */}
-                <defs>
-                  <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
-                    <feGaussianBlur stdDeviation="2" result="blur" />
-                    <feComposite in="SourceGraphic" in2="blur" operator="over" />
-                  </filter>
-                </defs>
-                {quadrantMode === 'all' && (
-                  <>
-                    <ReferenceLine x={0} stroke="rgba(0,0,0,0.5)" strokeWidth={1} ifOverflow="extendDomain" />
-                    <ReferenceLine y={0} stroke="rgba(0,0,0,0.5)" strokeWidth={1} ifOverflow="extendDomain" />
-                  </>
-                )}
-              </ScatterChart>
-            </ResponsiveContainer>
+            Global coordinates: ({Math.round(currentCoordinates.x)}, {Math.round(currentCoordinates.y)})
           </div>
         )}
       </div>
-      
-      {/* Resize Handlers */}
-      {!isMinimized && (
-        <>
-          <div className="absolute top-0 left-0 w-full h-4 cursor-ns-resize resize-handle" 
-               onMouseDown={(e) => handleDrag(e, 'top')}></div>
-          <div className="absolute top-0 right-0 w-4 h-4 cursor-nesw-resize resize-handle" 
-               onMouseDown={(e) => handleDrag(e, 'topRight')}></div>
-          <div className="absolute bottom-0 left-0 w-full h-4 cursor-ns-resize resize-handle" 
-               onMouseDown={(e) => handleDrag(e, 'bottom')}></div>
-          <div className="absolute top-0 left-0 h-full w-4 cursor-ew-resize resize-handle" 
-               onMouseDown={(e) => handleDrag(e, 'left')}></div>
-          <div className="absolute top-0 right-0 h-full w-4 cursor-ew-resize resize-handle" 
-               onMouseDown={(e) => handleDrag(e, 'right')}></div>
-          <div className="absolute bottom-0 right-0 w-4 h-4 cursor-nwse-resize resize-handle" 
-               onMouseDown={(e) => handleDrag(e, 'bottomRight')}></div>
-          <div className="absolute bottom-0 left-0 w-4 h-4 cursor-nesw-resize resize-handle" 
-               onMouseDown={(e) => handleDrag(e, 'bottomLeft')}></div>
-          <div className="absolute top-0 left-0 w-4 h-4 cursor-nwse-resize resize-handle" 
-               onMouseDown={(e) => handleDrag(e, 'topLeft')}></div>
-        </>
-      )}
-      
-      {/* Coordinate tooltip - shows when dragging */}
-      {showCoordinateTooltip && (
-        <div 
-          style={{
-            position: 'absolute',
-            top: '-40px',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            backgroundColor: 'rgba(30, 58, 138, 0.9)',
-            color: 'white',
-            padding: '4px 8px',
-            borderRadius: '4px',
-            fontSize: '12px',
-            fontWeight: 'bold',
-            whiteSpace: 'nowrap',
-            zIndex: 1000
-          }}
-        >
-          Global coordinates: ({Math.round(currentCoordinates.x)}, {Math.round(currentCoordinates.y)})
-        </div>
-      )}
-    </div>
+    </ErrorBoundary>
   );
 } 
