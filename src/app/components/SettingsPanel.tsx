@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Graph } from '../page';
+import { useGridSystem } from './GlobalCoordinateGrid';
 
 interface SettingsPanelProps {
   graph: Graph;
@@ -89,6 +90,21 @@ export default function SettingsPanel({ graph, onClose, onSettingsUpdate }: Sett
     };
   }, [graph.data]);
   
+  // Safely try to get grid system context
+  let gridSystem;
+  let gridContextAvailable = false;
+  try {
+    gridSystem = useGridSystem();
+    gridContextAvailable = true;
+  } catch (error) {
+    // Grid context not available, we'll handle this case
+    console.warn("Grid context not available in SettingsPanel");
+    gridSystem = {
+      gridSize: 50,
+      snapToGrid: (x: number, y: number) => ({ x, y })
+    };
+  }
+  
   const [localState, setLocalState] = useState({
     width: graph.size.width,
     height: graph.size.height,
@@ -108,6 +124,7 @@ export default function SettingsPanel({ graph, onClose, onSettingsUpdate }: Sett
     globalY: graph.globalCoordinate?.y?.toString() || '0',
     rotationCenterX: graph.rotationCenter?.x?.toString() || '0',
     rotationCenterY: graph.rotationCenter?.y?.toString() || '0',
+    snapToGrid: graph.settings?.snapToGrid !== undefined ? graph.settings.snapToGrid : true,
   });
 
   // Update local state when graph props change
@@ -132,6 +149,7 @@ export default function SettingsPanel({ graph, onClose, onSettingsUpdate }: Sett
       globalY: graph.globalCoordinate?.y?.toString() || '0',
       rotationCenterX: graph.rotationCenter?.x?.toString() || '0',
       rotationCenterY: graph.rotationCenter?.y?.toString() || '0',
+      snapToGrid: graph.settings?.snapToGrid !== undefined ? graph.settings.snapToGrid : true,
     });
   }, [graph]);
 
@@ -180,7 +198,22 @@ export default function SettingsPanel({ graph, onClose, onSettingsUpdate }: Sett
     }));
   };
 
-  // Handle apply changes
+  // Helper function to snap coordinates to grid
+  const snapCoordinatesToGrid = () => {
+    if (!gridContextAvailable) return;
+    
+    const x = parseFloat(localState.globalX) || 0;
+    const y = parseFloat(localState.globalY) || 0;
+    
+    const snapped = gridSystem.snapToGrid(x, y);
+    
+    setLocalState(prev => ({
+      ...prev,
+      globalX: snapped.x.toString(),
+      globalY: snapped.y.toString()
+    }));
+  };
+
   const handleApply = () => {
     const domains: any = {};
     
@@ -232,7 +265,8 @@ export default function SettingsPanel({ graph, onClose, onSettingsUpdate }: Sett
       settings: {
         showGrid: localState.showGrid,
         dotSize: parseInt(localState.dotSize.toString()) || 5,
-        showLabels: localState.showLabels
+        showLabels: localState.showLabels,
+        snapToGrid: localState.snapToGrid
       },
       globalCoordinate,
       rotationCenter
@@ -240,6 +274,78 @@ export default function SettingsPanel({ graph, onClose, onSettingsUpdate }: Sett
     
     // Automatically close the panel after applying changes
     onClose();
+  };
+
+  // Render the Global Position section only if grid context is available
+  const renderGlobalPositionSection = () => {
+    if (!gridContextAvailable) {
+      return (
+        <div className="p-3 bg-yellow-50 rounded border border-yellow-200 text-sm">
+          <p className="text-yellow-700">Grid system is not available in this context. Some positioning features are limited.</p>
+        </div>
+      );
+    }
+    
+    return (
+      <div>
+        <h4 className="font-medium text-sm mb-2 text-indigo-900">Global Position</h4>
+        <div className="space-y-2">
+          {/* Display current grid size */}
+          <div className="text-xs text-gray-500 mb-2">
+            Grid Size: {gridSystem.gridSize}px
+          </div>
+          
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label htmlFor="globalX" className="block text-xs text-gray-500 mb-1">X Coordinate</label>
+              <input
+                type="number"
+                id="globalX"
+                name="globalX"
+                value={localState.globalX}
+                onChange={handleInputChange}
+                className="w-full p-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-indigo-300 focus:border-indigo-500"
+              />
+            </div>
+            <div>
+              <label htmlFor="globalY" className="block text-xs text-gray-500 mb-1">Y Coordinate</label>
+              <input
+                type="number"
+                id="globalY"
+                name="globalY"
+                value={localState.globalY}
+                onChange={handleInputChange}
+                className="w-full p-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-indigo-300 focus:border-indigo-500"
+              />
+            </div>
+          </div>
+
+          {/* Snap to grid button and checkbox */}
+          <div className="flex justify-between items-center mt-2">
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                id="snapToGrid"
+                name="snapToGrid"
+                checked={localState.snapToGrid}
+                onChange={handleInputChange}
+                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+              />
+              <label htmlFor="snapToGrid" className="ml-2 block text-sm text-gray-700">
+                Snap to Grid
+              </label>
+            </div>
+            <button 
+              onClick={snapCoordinatesToGrid}
+              className="px-2 py-1 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 rounded text-sm"
+              title="Snap coordinates to nearest grid point"
+            >
+              Snap Now
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -470,6 +576,9 @@ export default function SettingsPanel({ graph, onClose, onSettingsUpdate }: Sett
           </div>
         </div>
 
+        {/* Global Position Controls - conditionally rendered */}
+        {renderGlobalPositionSection()}
+
         {/* Graph Transformation Settings */}
         <div>
           <h4 className="font-medium text-sm mb-2 text-indigo-900">Graph Transformation</h4>
@@ -491,35 +600,6 @@ export default function SettingsPanel({ graph, onClose, onSettingsUpdate }: Sett
                 >
                   Reset
                 </button>
-              </div>
-            </div>
-
-            {/* Global Coordinate */}
-            <div className="pt-2">
-              <label className="block text-xs text-gray-500 mb-1">Global Coordinate</label>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label htmlFor="globalX" className="block text-xs text-gray-500 mb-1">X</label>
-                  <input
-                    type="number"
-                    id="globalX"
-                    name="globalX"
-                    value={localState.globalX}
-                    onChange={handleInputChange}
-                    className="w-full p-2 border border-gray-300 rounded text-sm"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="globalY" className="block text-xs text-gray-500 mb-1">Y</label>
-                  <input
-                    type="number"
-                    id="globalY"
-                    name="globalY"
-                    value={localState.globalY}
-                    onChange={handleInputChange}
-                    className="w-full p-2 border border-gray-300 rounded text-sm"
-                  />
-                </div>
               </div>
             </div>
 

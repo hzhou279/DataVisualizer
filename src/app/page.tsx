@@ -6,7 +6,7 @@ import DraggableGraph from './components/DraggableGraph';
 import { parseCSVData, validateCSVFormat, ParsedData } from './utils/csvParser';
 import SettingsPanel from './components/SettingsPanel';
 import DataPanel from './components/DataPanel';
-import GlobalCoordinateGrid from './components/GlobalCoordinateGrid';
+import GlobalCoordinateGrid, { GridContextProvider } from './components/GlobalCoordinateGrid';
 
 type QuadrantMode = 'first' | 'all';
 
@@ -36,6 +36,7 @@ export interface Graph {
     showGrid: boolean;
     dotSize: number;
     showLabels: boolean;
+    snapToGrid?: boolean;
   };
   globalCoordinate?: { x: number; y: number };
   rotationCenter?: { x: number; y: number };
@@ -91,7 +92,8 @@ export default function Home() {
       settings: {
         showGrid: true,
         dotSize: 5,
-        showLabels: true
+        showLabels: true,
+        snapToGrid: true
       },
       globalCoordinate: { x: 0, y: 0 },
       rotationCenter: { x: 0, y: 0 }
@@ -354,62 +356,123 @@ export default function Home() {
         <div className="flex-1 bg-white relative overflow-hidden min-h-0" id="grid-container">
           {/* Global coordinate grid - taking full space */}
           <div className="absolute inset-0 w-full h-full" style={{ zIndex: 1 }}>
-            {showGrid && <GlobalCoordinateGrid gridSize={50} showLabels={true} />}
-          </div>
-
-          {/* Graphs container */}
-          <div className="relative h-full" style={{ zIndex: 2 }}>
-            {graphs.length > 0 ? (
-              graphs.map((graph) => (
-                <DraggableGraph
-                  key={graph.id}
-                  {...graph}
-                  filename={graph.title}
-                  zIndex={graph.zIndex || 100}
-                  onPositionChange={(x, y) => handlePositionUpdate(graph.id, x, y)}
-                  onSizeChange={(width, height) => handleSizeUpdate(graph.id, width, height)}
-                  onRotationChange={(rotation) => handleRotationUpdate(graph.id, rotation)}
-                  onColorChange={(color) => handleColorChange(graph.id, color)}
-                  onAxisIntervalsChange={(intervals) => handleAxisIntervalsUpdate(graph.id, intervals)}
-                  onDomainsChange={(domains) => handleDomainsUpdate(graph.id, domains)}
-                  onRemove={() => handleRemoveGraph(graph.id)}
-                  isSettingsOpen={selectedGraphId === graph.id}
-                  onToggleSettings={() => {
-                    if (selectedGraphId === graph.id) {
-                      setSelectedGraphId(null);
-                      setShowSettings(false);
-                    } else {
-                      setSelectedGraphId(graph.id);
-                      setShowSettings(true);
-                      if (selectedDataGraphId !== graph.id) {
-                        setSelectedDataGraphId(null);
-                      }
-                    }
-                  }}
-                  onDataPanelToggle={() => {
-                    if (selectedDataGraphId === graph.id) {
-                      setSelectedDataGraphId(null);
-                    } else {
-                      setSelectedDataGraphId(graph.id);
-                      if (selectedGraphId !== graph.id) {
-                        setSelectedGraphId(null);
-                      }
-                    }
-                  }}
-                  onClick={() => handleGraphClick(graph.id)}
-                />
-              ))
-            ) : (
-              <div className="flex items-center justify-center h-full">
-                <div className="text-center">
-                  <div className="bg-blue-50 p-6 rounded-full inline-block mb-4">
-                    <svg className="h-12 w-12 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                  </div>
-                  <h3 className="text-lg font-medium text-gray-900">No graphs yet</h3>
-                  <p className="text-gray-500 mt-1">Upload a CSV file to get started</p>
+            {showGrid && (
+              <GlobalCoordinateGrid gridSize={gridSize} showLabels={showGridLabels}>
+                {/* Graphs container */}
+                <div className="relative h-full" style={{ zIndex: 2 }}>
+                  {graphs.length > 0 ? (
+                    graphs.map((graph) => (
+                      <DraggableGraph
+                        key={graph.id}
+                        {...graph}
+                        filename={graph.title}
+                        zIndex={graph.zIndex || 100}
+                        onPositionChange={(x, y) => handlePositionUpdate(graph.id, x, y)}
+                        onSizeChange={(width, height) => handleSizeUpdate(graph.id, width, height)}
+                        onRotationChange={(rotation) => handleRotationUpdate(graph.id, rotation)}
+                        onColorChange={(color) => handleColorChange(graph.id, color)}
+                        onAxisIntervalsChange={(intervals) => handleAxisIntervalsUpdate(graph.id, intervals)}
+                        onDomainsChange={(domains) => handleDomainsUpdate(graph.id, domains)}
+                        onRemove={() => handleRemoveGraph(graph.id)}
+                        isSettingsOpen={selectedGraphId === graph.id}
+                        onToggleSettings={() => {
+                          if (selectedGraphId === graph.id) {
+                            setSelectedGraphId(null);
+                            setShowSettings(false);
+                          } else {
+                            setSelectedGraphId(graph.id);
+                            setShowSettings(true);
+                            if (selectedDataGraphId !== graph.id) {
+                              setSelectedDataGraphId(null);
+                            }
+                          }
+                        }}
+                        onDataPanelToggle={() => {
+                          if (selectedDataGraphId === graph.id) {
+                            setSelectedDataGraphId(null);
+                          } else {
+                            setSelectedDataGraphId(graph.id);
+                            if (selectedGraphId !== graph.id) {
+                              setSelectedGraphId(null);
+                            }
+                          }
+                        }}
+                        onClick={() => handleGraphClick(graph.id)}
+                        snapToGrid={graph.settings?.snapToGrid !== false}
+                      />
+                    ))
+                  ) : (
+                    <div className="flex items-center justify-center h-full">
+                      <div className="text-center">
+                        <div className="bg-blue-50 p-6 rounded-full inline-block mb-4">
+                          <svg className="h-12 w-12 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                        </div>
+                        <h3 className="text-lg font-medium text-gray-900">No graphs yet</h3>
+                        <p className="text-gray-500 mt-1">Upload a CSV file to get started</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
+              </GlobalCoordinateGrid>
+            )}
+            {!showGrid && (
+              <div className="relative h-full" style={{ zIndex: 2 }}>
+                {graphs.length > 0 ? (
+                  graphs.map((graph) => (
+                    <DraggableGraph
+                      key={graph.id}
+                      {...graph}
+                      filename={graph.title}
+                      zIndex={graph.zIndex || 100}
+                      onPositionChange={(x, y) => handlePositionUpdate(graph.id, x, y)}
+                      onSizeChange={(width, height) => handleSizeUpdate(graph.id, width, height)}
+                      onRotationChange={(rotation) => handleRotationUpdate(graph.id, rotation)}
+                      onColorChange={(color) => handleColorChange(graph.id, color)}
+                      onAxisIntervalsChange={(intervals) => handleAxisIntervalsUpdate(graph.id, intervals)}
+                      onDomainsChange={(domains) => handleDomainsUpdate(graph.id, domains)}
+                      onRemove={() => handleRemoveGraph(graph.id)}
+                      isSettingsOpen={selectedGraphId === graph.id}
+                      onToggleSettings={() => {
+                        if (selectedGraphId === graph.id) {
+                          setSelectedGraphId(null);
+                          setShowSettings(false);
+                        } else {
+                          setSelectedGraphId(graph.id);
+                          setShowSettings(true);
+                          if (selectedDataGraphId !== graph.id) {
+                            setSelectedDataGraphId(null);
+                          }
+                        }
+                      }}
+                      onDataPanelToggle={() => {
+                        if (selectedDataGraphId === graph.id) {
+                          setSelectedDataGraphId(null);
+                        } else {
+                          setSelectedDataGraphId(graph.id);
+                          if (selectedGraphId !== graph.id) {
+                            setSelectedGraphId(null);
+                          }
+                        }
+                      }}
+                      onClick={() => handleGraphClick(graph.id)}
+                      snapToGrid={false}
+                    />
+                  ))
+                ) : (
+                  <div className="flex items-center justify-center h-full">
+                    <div className="text-center">
+                      <div className="bg-blue-50 p-6 rounded-full inline-block mb-4">
+                        <svg className="h-12 w-12 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                      </div>
+                      <h3 className="text-lg font-medium text-gray-900">No graphs yet</h3>
+                      <p className="text-gray-500 mt-1">Upload a CSV file to get started</p>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -429,11 +492,13 @@ export default function Home() {
       
       <div className={`fixed right-0 top-0 h-full w-80 bg-white border-l shadow-xl transform transition-transform duration-300 z-50 ${showSettings ? 'translate-x-0' : 'translate-x-full'}`}>
         {showSettings && selectedGraph && (
-          <SettingsPanel 
-            graph={selectedGraph} 
-            onSettingsUpdate={handleSettingsUpdate}
-            onClose={handleSettingsClose}
-          />
+          <GridContextProvider gridSize={gridSize}>
+            <SettingsPanel 
+              graph={selectedGraph} 
+              onSettingsUpdate={handleSettingsUpdate}
+              onClose={handleSettingsClose}
+            />
+          </GridContextProvider>
         )}
       </div>
     </div>

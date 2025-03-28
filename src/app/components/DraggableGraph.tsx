@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import React from 'react';
+import { useGridSystem } from './GlobalCoordinateGrid';
 
 interface DraggableGraphProps {
   data: any[];
@@ -36,6 +37,7 @@ interface DraggableGraphProps {
   globalCoordinate?: { x: number; y: number };
   rotationCenter?: { x: number; y: number };
   onClick?: () => void;
+  snapToGrid?: boolean;
 }
 
 export default function DraggableGraph({ 
@@ -62,6 +64,7 @@ export default function DraggableGraph({
   globalCoordinate = { x: 0, y: 0 },
   rotationCenter = { x: 0, y: 0 },
   onClick,
+  snapToGrid = true,
 }: DraggableGraphProps) {
   // Store local rotation to ensure UI updates immediately
   const [localRotation, setLocalRotation] = useState(rotation);
@@ -92,6 +95,9 @@ export default function DraggableGraph({
   
   // Reference to the container element
   const containerRef = React.useRef<HTMLDivElement>(null);
+
+  // Use the grid system
+  const gridSystem = useGridSystem();
 
   // Create a memoized resize handler with the correct dependencies
   const createResizeHandler = useCallback(() => {
@@ -582,6 +588,211 @@ export default function DraggableGraph({
     console.log(`Forcing chart redraw due to size change: ${size.width}x${size.height}`);
   }, [size.width, size.height]);
 
+  // Function to handle drag with grid snapping
+  function handleDrag(e: React.MouseEvent, direction: string) {
+    e.preventDefault();
+    
+    // Don't start drag if we clicked on a button or input
+    if ((e.target as HTMLElement).tagName === 'BUTTON' || 
+        (e.target as HTMLElement).tagName === 'INPUT' ||
+        (e.target as HTMLElement).tagName === 'SVG' ||
+        (e.target as HTMLElement).tagName === 'path') {
+      return;
+    }
+
+    const initialX = e.clientX;
+    const initialY = e.clientY;
+    const initialLeft = position.x;
+    const initialTop = position.y;
+    const initialWidth = size.width;
+    const initialHeight = size.height;
+    
+    // Get initial position in grid coordinates
+    const initialGridPos = snapToGrid ? 
+      gridSystem.screenToGrid(initialLeft + globalCoordinate.x, initialTop + globalCoordinate.y) : 
+      { x: initialLeft + globalCoordinate.x, y: initialTop + globalCoordinate.y };
+    
+    // Update coordinate tooltip
+    setCurrentCoordinates({
+      x: initialLeft + globalCoordinate.x,
+      y: initialTop + globalCoordinate.y
+    });
+    setShowCoordinateTooltip(true);
+    
+    // Handle mouse move
+    function onMouseMove(moveEvent: MouseEvent) {
+      const dx = moveEvent.clientX - initialX;
+      const dy = moveEvent.clientY - initialY;
+      
+      // Set dragging state for styling
+      if (!isDragging) {
+        setIsDragging(true);
+      }
+      
+      // If just moving (not resizing)
+      if (direction === 'move') {
+        let newLeft = initialLeft + dx;
+        let newTop = initialTop + dy;
+        
+        // Convert to global coordinates for display
+        const globalX = newLeft + globalCoordinate.x;
+        const globalY = newTop + globalCoordinate.y;
+        
+        // Update coordinate tooltip
+        setCurrentCoordinates({ x: globalX, y: globalY });
+        
+        // Apply grid snapping if enabled
+        if (snapToGrid) {
+          const snapped = gridSystem.snapToGrid(globalX, globalY);
+          // Convert back to local coordinates (subtract global offset)
+          newLeft = snapped.x - globalCoordinate.x;
+          newTop = snapped.y - globalCoordinate.y;
+        }
+        
+        onPositionChange(newLeft, newTop);
+        return;
+      }
+      
+      // Handle resizing based on direction
+      let newWidth = initialWidth;
+      let newHeight = initialHeight;
+      let newLeft = initialLeft;
+      let newTop = initialTop;
+      
+      // Define min/max constraints
+      const minWidth = 250;
+      const minHeight = 200;
+      const maxWidth = 800;  // Hard limit regardless of window size
+      const maxHeight = 600; // Hard limit regardless of window size
+      
+      if (direction.includes('right') && !direction.includes('top') && !direction.includes('bottom')) {
+        newWidth = Math.max(minWidth, initialWidth + dx);
+        newLeft = initialLeft;
+      }
+      if (direction.includes('bottom')) {
+        newHeight = Math.max(minHeight, initialHeight + dy);
+        newTop = initialTop;
+      }
+      if (direction.includes('left')) {
+        const widthChange = dx;
+        newWidth = Math.max(minWidth, initialWidth - widthChange);
+        newLeft = initialLeft + widthChange;
+      }
+      if (direction.includes('top')) {
+        const heightChange = dy;
+        newHeight = Math.max(minHeight, initialHeight - heightChange);
+        newTop = initialTop + heightChange;
+      }
+      
+      // Handle resizing based on diagonal directions
+      if (direction === 'topRight') {
+        newWidth = Math.max(minWidth, initialWidth + dx);
+        newHeight = Math.max(minHeight, initialHeight - dy);
+        newTop = initialTop + dy;
+      }
+      if (direction === 'bottomRight') {
+        newWidth = Math.max(minWidth, initialWidth + dx);
+        newHeight = Math.max(minHeight, initialHeight + dy);
+      }
+      if (direction === 'bottomLeft') {
+        newWidth = Math.max(minWidth, initialWidth - dx);
+        newLeft = initialLeft + dx;
+        newHeight = Math.max(minHeight, initialHeight + dy);
+      }
+      if (direction === 'topLeft') {
+        newWidth = Math.max(minWidth, initialWidth - dx);
+        newLeft = initialLeft + dx;
+        newHeight = Math.max(minHeight, initialHeight - dy);
+        newTop = initialTop + dy;
+      }
+      
+      // Apply maximum constraints to prevent windows from growing too large
+      newWidth = Math.min(newWidth, maxWidth);
+      newHeight = Math.min(newHeight, maxHeight);
+      
+      // Recalculate position if max size was reached to prevent jumps
+      if (direction.includes('left') && newWidth === maxWidth) {
+        newLeft = initialLeft + initialWidth - maxWidth;
+      }
+      if (direction.includes('top') && newHeight === maxHeight) {
+        newTop = initialTop + initialHeight - maxHeight;
+      }
+      
+      // Apply grid snapping to position if enabled
+      if (snapToGrid && (direction.includes('left') || direction.includes('top'))) {
+        const globalX = newLeft + globalCoordinate.x;
+        const globalY = newTop + globalCoordinate.y;
+        const snapped = gridSystem.snapToGrid(globalX, globalY);
+        newLeft = snapped.x - globalCoordinate.x;
+        newTop = snapped.y - globalCoordinate.y;
+      }
+      
+      // Update coordinate tooltip with global position
+      setCurrentCoordinates({
+        x: newLeft + globalCoordinate.x,
+        y: newTop + globalCoordinate.y
+      });
+      
+      // Only update if there's an actual change to avoid unnecessary re-renders
+      if (newLeft !== position.x || newTop !== position.y) {
+        onPositionChange(newLeft, newTop);
+      }
+      
+      if (newWidth !== size.width || newHeight !== size.height) {
+        // Force chart key update to trigger re-render
+        setChartKey(prev => prev + 1);
+        
+        // Update size
+        onSizeChange(newWidth, newHeight);
+        
+        // Trigger recalculation of axes and domains when resizing
+        const xValues = data.map(point => point.x);
+        const yValues = data.map(point => point.y);
+        
+        const dataMin = {
+          x: Math.min(...xValues),
+          y: Math.min(...yValues)
+        };
+        
+        const dataMax = {
+          x: Math.max(...xValues),
+          y: Math.max(...yValues)
+        };
+        
+        // Use provided domains or calculate from data
+        const domainValues = {
+          xMin: localDomains.xMin !== undefined ? localDomains.xMin : (quadrantMode === 'all' ? Math.min(dataMin.x, 0) : (dataMin.x < 0 ? dataMin.x : 0)),
+          xMax: localDomains.xMax !== undefined ? localDomains.xMax : dataMax.x,
+          yMin: localDomains.yMin !== undefined ? localDomains.yMin : (quadrantMode === 'all' ? Math.min(dataMin.y, 0) : (dataMin.y < 0 ? dataMin.y : 0)),
+          yMax: localDomains.yMax !== undefined ? localDomains.yMax : dataMax.y
+        };
+        
+        // Add small padding to ensure points don't sit on the edge
+        const xPadding = (domainValues.xMax - domainValues.xMin) * 0.05;
+        const yPadding = (domainValues.yMax - domainValues.yMin) * 0.05;
+        
+        setScaledDomains({
+          xMin: domainValues.xMin - xPadding,
+          xMax: domainValues.xMax + xPadding,
+          yMin: domainValues.yMin - yPadding,
+          yMax: domainValues.yMax + yPadding
+        });
+      }
+    }
+    
+    // Handle mouse up
+    function onMouseUp() {
+      setIsDragging(false);
+      setShowCoordinateTooltip(false);
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    }
+    
+    // Add event listeners
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  }
+
   return (
     <div 
       ref={containerRef}
@@ -976,157 +1187,4 @@ export default function DraggableGraph({
       )}
     </div>
   );
-  
-  // Custom drag handler implementation
-  function handleDrag(e: React.MouseEvent, direction: string) {
-    e.preventDefault();
-    
-    // Don't start drag if we clicked on a button or input
-    if ((e.target as HTMLElement).tagName === 'BUTTON' || 
-        (e.target as HTMLElement).tagName === 'INPUT' ||
-        (e.target as HTMLElement).tagName === 'SVG' ||
-        (e.target as HTMLElement).tagName === 'path') {
-      return;
-    }
-
-    const initialX = e.clientX;
-    const initialY = e.clientY;
-    const initialLeft = position.x;
-    const initialTop = position.y;
-    const initialWidth = size.width;
-    const initialHeight = size.height;
-    
-    // Handle mouse move
-    function onMouseMove(moveEvent: MouseEvent) {
-      const dx = moveEvent.clientX - initialX;
-      const dy = moveEvent.clientY - initialY;
-      
-      // If just moving (not resizing)
-      if (direction === 'move') {
-        onPositionChange(initialLeft + dx, initialTop + dy);
-        return;
-      }
-      
-      // Handle resizing based on direction
-      let newWidth = initialWidth;
-      let newHeight = initialHeight;
-      let newLeft = initialLeft;
-      let newTop = initialTop;
-      
-      // Define min/max constraints
-      const minWidth = 250;
-      const minHeight = 200;
-      const maxWidth = 800;  // Hard limit regardless of window size
-      const maxHeight = 600; // Hard limit regardless of window size
-      
-      if (direction.includes('right') && !direction.includes('top') && !direction.includes('bottom')) {
-        newWidth = Math.max(minWidth, initialWidth + dx);
-        newLeft = initialLeft;
-      }
-      if (direction.includes('bottom')) {
-        newHeight = Math.max(minHeight, initialHeight + dy);
-        newTop = initialTop;
-      }
-      if (direction.includes('left')) {
-        const widthChange = dx;
-        newWidth = Math.max(minWidth, initialWidth - widthChange);
-        newLeft = initialLeft + widthChange;
-      }
-      if (direction.includes('top')) {
-        const heightChange = dy;
-        newHeight = Math.max(minHeight, initialHeight - heightChange);
-        newTop = initialTop + heightChange;
-      }
-      
-      // Handle resizing based on diagonal directions
-      if (direction === 'topRight') {
-        newWidth = Math.max(minWidth, initialWidth + dx);
-        newHeight = Math.max(minHeight, initialHeight - dy);
-        newTop = initialTop + dy;
-      }
-      if (direction === 'bottomRight') {
-        newWidth = Math.max(minWidth, initialWidth + dx);
-        newHeight = Math.max(minHeight, initialHeight + dy);
-      }
-      if (direction === 'bottomLeft') {
-        newWidth = Math.max(minWidth, initialWidth - dx);
-        newLeft = initialLeft + dx;
-        newHeight = Math.max(minHeight, initialHeight + dy);
-      }
-      if (direction === 'topLeft') {
-        newWidth = Math.max(minWidth, initialWidth - dx);
-        newLeft = initialLeft + dx;
-        newHeight = Math.max(minHeight, initialHeight - dy);
-        newTop = initialTop + dy;
-      }
-      
-      // Apply maximum constraints to prevent windows from growing too large
-      newWidth = Math.min(newWidth, maxWidth);
-      newHeight = Math.min(newHeight, maxHeight);
-      
-      // Recalculate position if max size was reached to prevent jumps
-      if (direction.includes('left') && newWidth === maxWidth) {
-        newLeft = initialLeft + initialWidth - maxWidth;
-      }
-      if (direction.includes('top') && newHeight === maxHeight) {
-        newTop = initialTop + initialHeight - maxHeight;
-      }
-      
-      // Only update if there's an actual change to avoid unnecessary re-renders
-      if (newLeft !== position.x || newTop !== position.y) {
-        onPositionChange(newLeft, newTop);
-      }
-      
-      if (newWidth !== size.width || newHeight !== size.height) {
-        // Force chart key update to trigger re-render
-        setChartKey(prev => prev + 1);
-        
-        // Update size
-        onSizeChange(newWidth, newHeight);
-        
-        // Trigger recalculation of axes and domains when resizing
-        const xValues = data.map(point => point.x);
-        const yValues = data.map(point => point.y);
-        
-        const dataMin = {
-          x: Math.min(...xValues),
-          y: Math.min(...yValues)
-        };
-        
-        const dataMax = {
-          x: Math.max(...xValues),
-          y: Math.max(...yValues)
-        };
-        
-        // Use provided domains or calculate from data
-        const domainValues = {
-          xMin: localDomains.xMin !== undefined ? localDomains.xMin : (quadrantMode === 'all' ? Math.min(dataMin.x, 0) : (dataMin.x < 0 ? dataMin.x : 0)),
-          xMax: localDomains.xMax !== undefined ? localDomains.xMax : dataMax.x,
-          yMin: localDomains.yMin !== undefined ? localDomains.yMin : (quadrantMode === 'all' ? Math.min(dataMin.y, 0) : (dataMin.y < 0 ? dataMin.y : 0)),
-          yMax: localDomains.yMax !== undefined ? localDomains.yMax : dataMax.y
-        };
-        
-        // Add small padding to ensure points don't sit on the edge
-        const xPadding = (domainValues.xMax - domainValues.xMin) * 0.05;
-        const yPadding = (domainValues.yMax - domainValues.yMin) * 0.05;
-        
-        setScaledDomains({
-          xMin: domainValues.xMin - xPadding,
-          xMax: domainValues.xMax + xPadding,
-          yMin: domainValues.yMin - yPadding,
-          yMax: domainValues.yMax + yPadding
-        });
-      }
-    }
-    
-    // Handle mouse up
-    function onMouseUp() {
-      document.removeEventListener('mousemove', onMouseMove);
-      document.removeEventListener('mouseup', onMouseUp);
-    }
-    
-    // Add event listeners
-    document.addEventListener('mousemove', onMouseMove);
-    document.addEventListener('mouseup', onMouseUp);
-  }
 } 
