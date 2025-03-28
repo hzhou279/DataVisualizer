@@ -303,14 +303,11 @@ export default function Home() {
   const handleSettingsUpdate = (settings: any) => {
     if (!selectedGraphId) return;
     
-    setGraphs(graphs.map(graph => {
-      if (graph.id === selectedGraphId) {
-        return { ...graph, ...settings };
-      }
-      return graph;
-    }));
+    // Use handleGraphUpdate to ensure proper handling of global coordinates
+    handleGraphUpdate(selectedGraphId, settings);
     
     // Reset selected graph ID after applying settings
+    setShowSettings(false);
     setSelectedGraphId(null);
   };
 

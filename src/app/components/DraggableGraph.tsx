@@ -897,13 +897,6 @@ export default function DraggableGraph({
               </h3>
             </div>
             
-            {/* Display position coordinates in the header */}
-            {!isMinimized && (
-              <div className="text-xs text-gray-500 mr-2">
-                {`Pos: (${Math.round(position.x + (globalCoordinate?.x || 0))}, ${Math.round(position.y + (globalCoordinate?.y || 0))})`}
-              </div>
-            )}
-            
             {/* Controls */}
             <div className={`flex ${isMinimized ? 'space-x-0.5' : 'space-x-1'} z-10`}>
               {/* Rotation control - only visible when not minimized */}
