@@ -240,12 +240,16 @@ export default function DraggableGraph({
     const hasExplicitYMin = localDomains.yMin !== undefined;
     const hasExplicitYMax = localDomains.yMax !== undefined;
     
-    // Use provided domains or calculate from data
+    // Use provided domains but ensure all data points are included
+    // For explicitly set domains, take the more inclusive value between
+    // the user-specified domain and the actual data range
     const domainValues = {
-      xMin: hasExplicitXMin ? localDomains.xMin : (quadrantMode === 'all' ? Math.min(dataMin.x, 0) : (dataMin.x < 0 ? dataMin.x : 0)),
-      xMax: hasExplicitXMax ? localDomains.xMax : dataMax.x,
-      yMin: hasExplicitYMin ? localDomains.yMin : (quadrantMode === 'all' ? Math.min(dataMin.y, 0) : (dataMin.y < 0 ? dataMin.y : 0)),
-      yMax: hasExplicitYMax ? localDomains.yMax : dataMax.y
+      xMin: hasExplicitXMin ? Math.min(localDomains.xMin as number, dataMin.x) : 
+            (quadrantMode === 'all' ? Math.min(dataMin.x, 0) : (dataMin.x < 0 ? dataMin.x : 0)),
+      xMax: hasExplicitXMax ? Math.max(localDomains.xMax as number, dataMax.x) : dataMax.x,
+      yMin: hasExplicitYMin ? Math.min(localDomains.yMin as number, dataMin.y) : 
+            (quadrantMode === 'all' ? Math.min(dataMin.y, 0) : (dataMin.y < 0 ? dataMin.y : 0)),
+      yMax: hasExplicitYMax ? Math.max(localDomains.yMax as number, dataMax.y) : dataMax.y
     };
     
     console.log(`DEBUG calculatedDomains - Initial Domain Values: X:[${domainValues.xMin}, ${domainValues.xMax}], Y:[${domainValues.yMin}, ${domainValues.yMax}]`);
@@ -254,15 +258,18 @@ export default function DraggableGraph({
     const xRange = (domainValues.xMax ?? 0) - (domainValues.xMin ?? 0);
     const yRange = (domainValues.yMax ?? 0) - (domainValues.yMin ?? 0);
     
-    // Add small padding ONLY for auto-calculated ranges - don't modify explicitly set values
+    // Add small padding for better visualization
+    // Even for explicitly set domains, add a bit of padding to avoid points at the edges
+    const paddingFactor = 0.05; // 5% padding
+    
     const result = {
-      xMin: hasExplicitXMin ? domainValues.xMin : (domainValues.xMin ?? 0) - (xRange * 0.05),
-      xMax: hasExplicitXMax ? domainValues.xMax : (domainValues.xMax ?? 0) + (xRange * 0.05),
-      yMin: hasExplicitYMin ? domainValues.yMin : (domainValues.yMin ?? 0) - (yRange * 0.05),
-      yMax: hasExplicitYMax ? domainValues.yMax : (domainValues.yMax ?? 0) + (yRange * 0.05)
+      xMin: (domainValues.xMin ?? 0) - (xRange * paddingFactor),
+      xMax: (domainValues.xMax ?? 0) + (xRange * paddingFactor),
+      yMin: (domainValues.yMin ?? 0) - (yRange * paddingFactor),
+      yMax: (domainValues.yMax ?? 0) + (yRange * paddingFactor)
     };
     
-    console.log(`DEBUG calculatedDomains - Final Domains: X:[${result.xMin}, ${result.xMax}], Y:[${result.yMin}, ${result.yMax}]`);
+    console.log(`DEBUG calculatedDomains - Final Padded Domains: X:[${result.xMin}, ${result.xMax}], Y:[${result.yMin}, ${result.yMax}]`);
     
     return result;
   }, [data, localDomains, quadrantMode]);
@@ -743,17 +750,7 @@ export default function DraggableGraph({
                   type="number" 
                   dataKey="x" 
                   xAxisId={0}
-                  domain={
-                    quadrantMode === 'all' 
-                      ? [
-                        scaledDomains.xMin !== undefined ? scaledDomains.xMin : (dataMin: number) => Math.min(dataMin, 0), 
-                        scaledDomains.xMax !== undefined ? scaledDomains.xMax : (dataMax: number) => Math.max(dataMax, 0)
-                      ]
-                      : [
-                        scaledDomains.xMin !== undefined ? scaledDomains.xMin : 0, 
-                        scaledDomains.xMax !== undefined ? scaledDomains.xMax : 'auto'
-                      ]
-                  } 
+                  domain={[scaledDomains.xMin ?? 0, scaledDomains.xMax ?? 100]} 
                   allowDataOverflow={false}
                   includeHidden={true}
                   allowDecimals={true}
@@ -802,17 +799,7 @@ export default function DraggableGraph({
                   type="number"
                   dataKey="y"
                   yAxisId={0}
-                  domain={
-                    quadrantMode === 'all' 
-                      ? [
-                        scaledDomains.yMin !== undefined ? scaledDomains.yMin : (dataMin: number) => Math.min(dataMin, 0), 
-                        scaledDomains.yMax !== undefined ? scaledDomains.yMax : (dataMax: number) => Math.max(dataMax, 0)
-                      ]
-                      : [
-                        scaledDomains.yMin !== undefined ? scaledDomains.yMin : 0, 
-                        scaledDomains.yMax !== undefined ? scaledDomains.yMax : 'auto'
-                      ]
-                  }
+                  domain={[scaledDomains.yMin ?? 0, scaledDomains.yMax ?? 100]}
                   allowDataOverflow={false}
                   includeHidden={true}
                   allowDecimals={true}
