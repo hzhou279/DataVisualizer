@@ -141,6 +141,17 @@ export default function Home() {
     );
   };
 
+  // Function to update axis intervals
+  const handleAxisIntervalsUpdate = (graphId: string, intervals: { x: number; y: number }) => {
+    setGraphs((prevGraphs) =>
+      prevGraphs.map((graph) =>
+        graph.id === graphId
+          ? { ...graph, axisIntervals: intervals }
+          : graph
+      )
+    );
+  };
+
   // Function to remove a graph
   const handleRemoveGraph = (graphId: string) => {
     // Close any open panels for this graph
@@ -348,6 +359,7 @@ export default function Home() {
                   onSizeChange={(width, height) => handleSizeUpdate(graph.id, width, height)}
                   onRotationChange={(rotation) => handleRotationUpdate(graph.id, rotation)}
                   onColorChange={(color) => handleColorChange(graph.id, color)}
+                  onAxisIntervalsChange={(intervals) => handleAxisIntervalsUpdate(graph.id, intervals)}
                   onRemove={() => handleRemoveGraph(graph.id)}
                   isSettingsOpen={selectedGraphId === graph.id}
                   onToggleSettings={() => {

@@ -152,9 +152,10 @@ export default function SettingsPanel({ graph, onClose, onSettingsUpdate }: Sett
     if (localState.yMin !== '') domains.yMin = parseFloat(localState.yMin);
     if (localState.yMax !== '') domains.yMax = parseFloat(localState.yMax);
     
+    // Ensure we have valid interval values
     const axisIntervals = {
-      x: parseInt(localState.xIntervals) || 5,
-      y: parseInt(localState.yIntervals) || 5
+      x: Math.max(1, parseInt(localState.xIntervals) || 5),
+      y: Math.max(1, parseInt(localState.yIntervals) || 5)
     };
     
     // Parse global coordinate and rotation center

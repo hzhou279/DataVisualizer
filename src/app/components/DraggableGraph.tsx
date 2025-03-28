@@ -29,6 +29,7 @@ interface DraggableGraphProps {
     x: number;
     y: number;
   };
+  onAxisIntervalsChange?: (intervals: { x: number; y: number }) => void;
   quadrantMode?: 'first' | 'all';
   onDataPanelToggle: () => void;
   globalCoordinate?: { x: number; y: number };
@@ -53,6 +54,7 @@ export default function DraggableGraph({
   onToggleSettings,
   domains,
   axisIntervals,
+  onAxisIntervalsChange,
   quadrantMode = 'first',
   onDataPanelToggle,
   globalCoordinate = { x: 0, y: 0 },
@@ -232,32 +234,35 @@ export default function DraggableGraph({
     console.log(`DEBUG calculatedDomains - Actual Data Range: X:[${dataMin.x}, ${dataMax.x}], Y:[${dataMin.y}, ${dataMax.y}]`);
     console.log(`DEBUG calculatedDomains - Input localDomains: `, localDomains);
     
+    // Check if we have explicitly set domains
+    const hasExplicitXMin = localDomains.xMin !== undefined;
+    const hasExplicitXMax = localDomains.xMax !== undefined;
+    const hasExplicitYMin = localDomains.yMin !== undefined;
+    const hasExplicitYMax = localDomains.yMax !== undefined;
+    
     // Use provided domains or calculate from data
     const domainValues = {
-      xMin: localDomains.xMin !== undefined ? localDomains.xMin : (quadrantMode === 'all' ? Math.min(dataMin.x, 0) : (dataMin.x < 0 ? dataMin.x : 0)),
-      xMax: localDomains.xMax !== undefined ? localDomains.xMax : dataMax.x,
-      yMin: localDomains.yMin !== undefined ? localDomains.yMin : (quadrantMode === 'all' ? Math.min(dataMin.y, 0) : (dataMin.y < 0 ? dataMin.y : 0)),
-      yMax: localDomains.yMax !== undefined ? localDomains.yMax : dataMax.y
+      xMin: hasExplicitXMin ? localDomains.xMin : (quadrantMode === 'all' ? Math.min(dataMin.x, 0) : (dataMin.x < 0 ? dataMin.x : 0)),
+      xMax: hasExplicitXMax ? localDomains.xMax : dataMax.x,
+      yMin: hasExplicitYMin ? localDomains.yMin : (quadrantMode === 'all' ? Math.min(dataMin.y, 0) : (dataMin.y < 0 ? dataMin.y : 0)),
+      yMax: hasExplicitYMax ? localDomains.yMax : dataMax.y
     };
     
     console.log(`DEBUG calculatedDomains - Initial Domain Values: X:[${domainValues.xMin}, ${domainValues.xMax}], Y:[${domainValues.yMin}, ${domainValues.yMax}]`);
     
     // Calculate data ranges to determine appropriate padding
-    const xRange = domainValues.xMax - domainValues.xMin;
-    const yRange = domainValues.yMax - domainValues.yMin;
+    const xRange = (domainValues.xMax ?? 0) - (domainValues.xMin ?? 0);
+    const yRange = (domainValues.yMax ?? 0) - (domainValues.yMin ?? 0);
     
-    // Add small padding to ensure points don't sit on the edge (5-10% padding depending on range)
-    const xPadding = xRange * 0.05;
-    const yPadding = yRange * 0.05;
-    
+    // Add small padding ONLY for auto-calculated ranges - don't modify explicitly set values
     const result = {
-      xMin: domainValues.xMin - xPadding,
-      xMax: domainValues.xMax + xPadding,
-      yMin: domainValues.yMin - yPadding,
-      yMax: domainValues.yMax + yPadding
+      xMin: hasExplicitXMin ? domainValues.xMin : (domainValues.xMin ?? 0) - (xRange * 0.05),
+      xMax: hasExplicitXMax ? domainValues.xMax : (domainValues.xMax ?? 0) + (xRange * 0.05),
+      yMin: hasExplicitYMin ? domainValues.yMin : (domainValues.yMin ?? 0) - (yRange * 0.05),
+      yMax: hasExplicitYMax ? domainValues.yMax : (domainValues.yMax ?? 0) + (yRange * 0.05)
     };
     
-    console.log(`DEBUG calculatedDomains - Final Padded Domains: X:[${result.xMin}, ${result.xMax}], Y:[${result.yMin}, ${result.yMax}]`);
+    console.log(`DEBUG calculatedDomains - Final Domains: X:[${result.xMin}, ${result.xMax}], Y:[${result.yMin}, ${result.yMax}]`);
     
     return result;
   }, [data, localDomains, quadrantMode]);
@@ -265,7 +270,39 @@ export default function DraggableGraph({
   // Update scaled domains when domains are calculated
   useEffect(() => {
     setScaledDomains(calculatedDomains);
-  }, [calculatedDomains]);
+    
+    // Calculate optimal axis intervals based on the data range and notify parent
+    // Only perform this calculation when the graph is first loaded (no axisIntervals set yet)
+    // or when domains change significantly
+    if (onAxisIntervalsChange && data && data.length > 0 && !axisIntervals) {
+      const xRange = (calculatedDomains.xMax ?? 100) - (calculatedDomains.xMin ?? 0);
+      const yRange = (calculatedDomains.yMax ?? 100) - (calculatedDomains.yMin ?? 0);
+      
+      // Calculate optimal interval count based on range magnitude
+      // This is a heuristic that works well for most data ranges
+      const calculateOptimalIntervals = (range: number): number => {
+        if (range <= 0) return 5; // Default for invalid ranges
+        
+        // Get magnitude of the range
+        const magnitude = Math.floor(Math.log10(range));
+        const normalizedRange = range / Math.pow(10, magnitude);
+        
+        // Choose interval count based on normalized range
+        if (normalizedRange <= 1) return 5;
+        else if (normalizedRange <= 2.5) return 5;
+        else if (normalizedRange <= 5) return 5;
+        else return 10;
+      };
+      
+      const optimalIntervals = {
+        x: calculateOptimalIntervals(xRange),
+        y: calculateOptimalIntervals(yRange)
+      };
+      
+      // Only notify if the calculated intervals are different from current ones
+      onAxisIntervalsChange(optimalIntervals);
+    }
+  }, [calculatedDomains, data, onAxisIntervalsChange, axisIntervals]);
 
   // Sync local rotation with prop when it changes externally
   useEffect(() => {
@@ -725,31 +762,22 @@ export default function DraggableGraph({
                     const min = scaledDomains.xMin ?? 0;
                     const max = scaledDomains.xMax ?? 100;
                     
-                    // Fixed number of intervals for consistent spacing
-                    const fixedTickCount = 6; // Will create 5 equal spaces
+                    // Use axisIntervals prop instead of fixed count
+                    const intervalCount = axisIntervals?.x || 5; // Default to 5 intervals if not provided
                     
-                    // Calculate step size based on fixed count
-                    const rawStepSize = (max - min) / (fixedTickCount - 1);
+                    // Generate exactly intervalCount+1 ticks for intervalCount intervals
+                    if (intervalCount <= 1) {
+                      return [min, max]; // Minimum 2 ticks (1 interval)
+                    }
                     
-                    // Round to a nice number
-                    const magnitude = Math.pow(10, Math.floor(Math.log10(rawStepSize)));
-                    let stepSize;
+                    // Calculate exact step size without rounding to ensure exact interval count
+                    const exactStepSize = (max - min) / intervalCount;
                     
-                    // Choose appropriate step size that's a nice round number
-                    const normalizedStep = rawStepSize / magnitude;
-                    if (normalizedStep < 1.5) stepSize = magnitude;
-                    else if (normalizedStep < 3) stepSize = 2 * magnitude;
-                    else if (normalizedStep < 7) stepSize = 5 * magnitude;
-                    else stepSize = 10 * magnitude;
-                    
-                    // Ensure we always include min and max in our ticks
-                    const adjustedMin = Math.floor(min / stepSize) * stepSize;
-                    const adjustedMax = Math.ceil(max / stepSize) * stepSize;
-                    
-                    // Generate ticks at even intervals
+                    // Generate ticks with exact interval count
                     const ticks = [];
-                    for (let i = adjustedMin; i <= adjustedMax + (stepSize / 2); i += stepSize) {
-                      ticks.push(parseFloat(i.toFixed(10))); // Fix floating point precision issues
+                    for (let i = 0; i <= intervalCount; i++) {
+                      const value = min + (exactStepSize * i);
+                      ticks.push(parseFloat(value.toFixed(10))); // Fix floating point precision issues
                     }
                     
                     return ticks;
@@ -793,31 +821,22 @@ export default function DraggableGraph({
                     const min = scaledDomains.yMin ?? 0;
                     const max = scaledDomains.yMax ?? 100;
                     
-                    // Fixed number of intervals for consistent spacing
-                    const fixedTickCount = 6; // Will create 5 equal spaces
+                    // Use axisIntervals prop instead of fixed count
+                    const intervalCount = axisIntervals?.y || 5; // Default to 5 intervals if not provided
                     
-                    // Calculate step size based on fixed count
-                    const rawStepSize = (max - min) / (fixedTickCount - 1);
+                    // Generate exactly intervalCount+1 ticks for intervalCount intervals
+                    if (intervalCount <= 1) {
+                      return [min, max]; // Minimum 2 ticks (1 interval)
+                    }
                     
-                    // Round to a nice number
-                    const magnitude = Math.pow(10, Math.floor(Math.log10(rawStepSize)));
-                    let stepSize;
+                    // Calculate exact step size without rounding to ensure exact interval count
+                    const exactStepSize = (max - min) / intervalCount;
                     
-                    // Choose appropriate step size that's a nice round number
-                    const normalizedStep = rawStepSize / magnitude;
-                    if (normalizedStep < 1.5) stepSize = magnitude;
-                    else if (normalizedStep < 3) stepSize = 2 * magnitude;
-                    else if (normalizedStep < 7) stepSize = 5 * magnitude;
-                    else stepSize = 10 * magnitude;
-                    
-                    // Ensure we always include min and max in our ticks
-                    const adjustedMin = Math.floor(min / stepSize) * stepSize;
-                    const adjustedMax = Math.ceil(max / stepSize) * stepSize;
-                    
-                    // Generate ticks at even intervals
+                    // Generate ticks with exact interval count
                     const ticks = [];
-                    for (let i = adjustedMin; i <= adjustedMax + (stepSize / 2); i += stepSize) {
-                      ticks.push(parseFloat(i.toFixed(10))); // Fix floating point precision issues
+                    for (let i = 0; i <= intervalCount; i++) {
+                      const value = min + (exactStepSize * i);
+                      ticks.push(parseFloat(value.toFixed(10))); // Fix floating point precision issues
                     }
                     
                     return ticks;
