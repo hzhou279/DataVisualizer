@@ -39,6 +39,12 @@ interface DraggableGraphProps {
   rotationCenter?: { x: number; y: number };
   onClick?: () => void;
   snapToGrid?: boolean;
+  settings?: {
+    showGrid: boolean;
+    dotSize: number;
+    showLabels: boolean;
+    snapToGrid?: boolean;
+  };
 }
 
 export default function DraggableGraph({ 
@@ -66,6 +72,7 @@ export default function DraggableGraph({
   rotationCenter = { x: 0, y: 0 },
   onClick,
   snapToGrid = true,
+  settings,
 }: DraggableGraphProps) {
   // Store local rotation to ensure UI updates immediately
   const [localRotation, setLocalRotation] = useState(rotation);
@@ -235,15 +242,19 @@ export default function DraggableGraph({
   const renderStrategy = useMemo(() => {
     if (!data) return { useSimplePoints: false, pointSize: 6 };
     
+    // Use settings.dotSize if available, otherwise default to dynamic sizing based on data length
+    const pointSize = settings?.dotSize ?? (
+      data.length > 5000 ? 2 : 
+      data.length > 1000 ? 3 : 
+      data.length > 500 ? 4 : 6
+    );
+    
     return {
       // Use simplified points for large datasets
       useSimplePoints: data.length > 500,
-      // Adjust point size based on data density
-      pointSize: data.length > 5000 ? 2 : 
-                data.length > 1000 ? 3 : 
-                data.length > 500 ? 4 : 6
+      pointSize
     };
-  }, [data]);
+  }, [data, settings?.dotSize]);
 
   // Memoize domain calculations to avoid recalculating on every render
   const calculatedDomains = useMemo(() => {
