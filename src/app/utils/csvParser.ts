@@ -57,8 +57,6 @@ export function parseCSVData(data: any[]): ParsedData[] {
     // Handle zero specially
     if (value === 0) return 0;
     
-    console.log(`DEBUG roundDomainValue - Input: ${value}, isMin: ${isMin}`);
-    
     const absValue = Math.abs(value);
     
     // For values close to nice numbers, don't over-expand the range
@@ -67,8 +65,6 @@ export function parseCSVData(data: any[]): ParsedData[] {
     
     // If the value is already close to a nice number, use a smaller magnitude
     const normalizedValue = absValue / adjustedMagnitude;
-    
-    console.log(`DEBUG roundDomainValue - absValue: ${absValue}, magnitude: ${adjustedMagnitude}, normalizedValue: ${normalizedValue}`);
     
     let niceValue;
     
@@ -113,8 +109,6 @@ export function parseCSVData(data: any[]): ParsedData[] {
       niceValue = niceValue * (value < 0 ? -1 : 1);
     }
     
-    console.log(`DEBUG roundDomainValue - Output: ${niceValue}`);
-    
     return niceValue;
   };
   
@@ -123,8 +117,6 @@ export function parseCSVData(data: any[]): ParsedData[] {
   const xMax = Math.max(...result.map(point => point.x));
   const yMin = Math.min(...result.map(point => point.y));
   const yMax = Math.max(...result.map(point => point.y));
-  
-  console.log(`DEBUG parseCSVData - Actual Data Range: X:[${xMin}, ${xMax}], Y:[${yMin}, ${yMax}]`);
   
   // Calculate if we need to use four quadrants
   const shouldUseFourQuadrants = xMin < 0 || yMin < 0;
@@ -148,8 +140,6 @@ export function parseCSVData(data: any[]): ParsedData[] {
       yMax: roundDomainValue(yMax, false)
     };
   }
-  
-  console.log(`DEBUG parseCSVData - Calculated Domains: X:[${domains.xMin}, ${domains.xMax}], Y:[${domains.yMin}, ${domains.yMax}]`);
   
   // Add metadata to the first data point (for processing in page.tsx)
   if (result.length > 0) {

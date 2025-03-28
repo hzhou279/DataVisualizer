@@ -19,7 +19,6 @@ export default function FileUploader({ onDataParsed }: FileUploaderProps) {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    console.log(`Processing file: ${file.name}, type: ${file.type}`);
     setIsUploading(true);
     
     const fileExt = file.name.split('.').pop()?.toLowerCase();
@@ -27,10 +26,8 @@ export default function FileUploader({ onDataParsed }: FileUploaderProps) {
     
     try {
       if (fileExt === 'csv') {
-        console.log('Processing as CSV file');
         processCSVFile(file, fileName);
       } else if (fileExt === 'xlsx' || fileExt === 'xls') {
-        console.log('Processing as Excel file');
         processExcelFile(file, fileName);
       } else {
         alert('Unsupported file format. Please upload a CSV, XLSX, or XLS file.');

@@ -106,7 +106,6 @@ export default function GlobalCoordinateGrid({ gridSize = 50, showLabels = true,
         width: rect.width,
         height: rect.height
       });
-      console.log('Grid container dimensions:', rect.width, rect.height); // Debug log
     }
   }, []);
 

@@ -124,7 +124,6 @@ export default function Home() {
   };
 
   const handleRotationUpdate = (graphId: string, rotation: number) => {
-    console.log(`Rotating graph ${graphId} to ${rotation}°`);
     setGraphs((prevGraphs) =>
       prevGraphs.map((graph) =>
         graph.id === graphId

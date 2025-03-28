@@ -138,8 +138,6 @@ export default function DraggableGraph({
       const initialWindowWidth = window.innerWidth;
       const initialWindowHeight = window.innerHeight;
       
-      console.log(`Setting up resize handler - Graph: ${initialGraphWidth}x${initialGraphHeight}, Window: ${initialWindowWidth}x${initialWindowHeight}`);
-      
       // Return the actual resize handler function
       return () => {
         const currentWindowWidth = window.innerWidth;
@@ -154,8 +152,6 @@ export default function DraggableGraph({
         const widthRatio = currentWindowWidth / initialWindowWidth;
         const heightRatio = currentWindowHeight / initialWindowHeight;
         
-        console.log(`Window resize detected - Current: ${currentWindowWidth}x${currentWindowHeight}, Ratio W:${widthRatio.toFixed(2)} H:${heightRatio.toFixed(2)}`);
-        
         // Calculate new dimensions - using the ratio to scale from initial size
         let newWidth = Math.round(initialGraphWidth * widthRatio);
         let newHeight = Math.round(initialGraphHeight * heightRatio);
@@ -169,8 +165,6 @@ export default function DraggableGraph({
         // Ensure we don't try to make the graph larger than the available space
         newWidth = Math.min(Math.max(newWidth, minWidth), maxWidth);
         newHeight = Math.min(Math.max(newHeight, minHeight), maxHeight);
-        
-        console.log(`New graph size: ${size.width}x${size.height} -> ${newWidth}x${newHeight}`);
         
         // Only update if dimensions actually changed
         if (newWidth !== size.width || newHeight !== size.height) {
@@ -269,9 +263,6 @@ export default function DraggableGraph({
       y: Math.max(...yValues)
     };
     
-    console.log(`DEBUG calculatedDomains - Actual Data Range: X:[${dataMin.x}, ${dataMax.x}], Y:[${dataMin.y}, ${dataMax.y}]`);
-    console.log(`DEBUG calculatedDomains - Input localDomains: `, localDomains);
-    
     // Check if we have explicitly set domains
     const hasExplicitXMin = localDomains.xMin !== undefined;
     const hasExplicitXMax = localDomains.xMax !== undefined;
@@ -290,8 +281,6 @@ export default function DraggableGraph({
       yMax: hasExplicitYMax ? Math.max(localDomains.yMax as number, dataMax.y) : dataMax.y
     };
     
-    console.log(`DEBUG calculatedDomains - Initial Domain Values: X:[${domainValues.xMin}, ${domainValues.xMax}], Y:[${domainValues.yMin}, ${domainValues.yMax}]`);
-    
     // Calculate data ranges to determine appropriate padding
     const xRange = (domainValues.xMax ?? 0) - (domainValues.xMin ?? 0);
     const yRange = (domainValues.yMax ?? 0) - (domainValues.yMin ?? 0);
@@ -306,8 +295,6 @@ export default function DraggableGraph({
       yMin: (domainValues.yMin ?? 0) - (yRange * paddingFactor),
       yMax: (domainValues.yMax ?? 0) + (yRange * paddingFactor)
     };
-    
-    console.log(`DEBUG calculatedDomains - Final Padded Domains: X:[${result.xMin}, ${result.xMax}], Y:[${result.yMin}, ${result.yMax}]`);
     
     return result;
   }, [data, localDomains, quadrantMode]);
@@ -605,8 +592,6 @@ export default function DraggableGraph({
       settingsButton.classList.remove('bg-blue-500', 'text-white', 'hover:bg-blue-600', 'shadow-sm');
       settingsButton.classList.add('bg-white', 'text-gray-500', 'hover:text-gray-700', 'hover:bg-gray-100');
     }
-    
-    console.log(`Settings button state updated: isSettingsOpen=${isSettingsOpen}`);
   }, [isSettingsOpen]);
 
   // Force re-render of chart when size changes
@@ -615,7 +600,6 @@ export default function DraggableGraph({
   // When the size changes, force a re-render of the chart
   useEffect(() => {
     setChartKey(prev => prev + 1);
-    console.log(`Forcing chart redraw due to size change: ${size.width}x${size.height}`);
   }, [size.width, size.height]);
 
   // Function to handle drag with grid snapping
@@ -1012,7 +996,6 @@ export default function DraggableGraph({
                 onResize={(width, height) => {
                   if (width && height) {
                     setContentSize({ width, height });
-                    console.log(`Content resized to: ${width}x${height}`);
                   }
                 }}
               >
