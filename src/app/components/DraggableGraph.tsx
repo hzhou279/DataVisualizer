@@ -97,8 +97,37 @@ export default function DraggableGraph({
   // Reference to the container element
   const containerRef = React.useRef<HTMLDivElement>(null);
 
-  // Use the grid system
-  const gridSystem = useGridSystem();
+  // Use the grid system with proper typing
+  interface GridSystemType {
+    gridSize: number;
+    snapToGrid: (x: number, y: number) => { x: number, y: number };
+    screenToGrid?: (x: number, y: number) => { x: number, y: number };
+    gridToScreen?: (x: number, y: number) => { x: number, y: number };
+    getPadding?: () => { LEFT: number, TOP: number, RIGHT: number, BOTTOM: number };
+    getDimensions?: () => { width: number, height: number };
+  }
+  
+  let gridSystem: GridSystemType;
+  try {
+    gridSystem = useGridSystem();
+  } catch (error) {
+    // Provide fallback when grid context is not available
+    console.warn("Grid context not available in DraggableGraph");
+    gridSystem = {
+      gridSize: 50,
+      snapToGrid: (x: number, y: number) => ({ x, y }),
+      screenToGrid: (x: number, y: number) => ({ x, y }) // Add fallback implementation
+    };
+  }
+
+  // Get initial position in grid coordinates
+  const getGridPosition = (x: number, y: number) => {
+    if (gridSystem.screenToGrid) {
+      return gridSystem.screenToGrid(x, y);
+    }
+    // Fallback if screenToGrid is not available
+    return { x, y };
+  };
 
   // Create a memoized resize handler with the correct dependencies
   const createResizeHandler = useCallback(() => {
@@ -610,7 +639,7 @@ export default function DraggableGraph({
     
     // Get initial position in grid coordinates
     const initialGridPos = snapToGrid ? 
-      gridSystem.screenToGrid(initialLeft + globalCoordinate.x, initialTop + globalCoordinate.y) : 
+      getGridPosition(initialLeft + globalCoordinate.x, initialTop + globalCoordinate.y) : 
       { x: initialLeft + globalCoordinate.x, y: initialTop + globalCoordinate.y };
     
     // Update coordinate tooltip
