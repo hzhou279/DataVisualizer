@@ -45,7 +45,49 @@ interface DraggableGraphProps {
     showLabels: boolean;
     snapToGrid?: boolean;
   };
+  allGraphs?: any[];
+  onDumpPoints?: (fromGraphId: string, toGraphId: string, transformedPoints: any[]) => void;
+  id: string;
 }
+
+// Helper function to check if two rectangles overlap
+const doRectanglesOverlap = (
+  rect1: { x: number; y: number; width: number; height: number },
+  rect2: { x: number; y: number; width: number; height: number }
+): boolean => {
+  return (
+    rect1.x < rect2.x + rect2.width &&
+    rect1.x + rect1.width > rect2.x &&
+    rect1.y < rect2.y + rect2.height &&
+    rect1.y + rect1.height > rect2.y
+  );
+};
+
+// Helper function to transform points between coordinate systems
+const transformPoints = (
+  points: any[],
+  fromDomains: { xMin: number; xMax: number; yMin: number; yMax: number },
+  toDomains: { xMin: number; xMax: number; yMin: number; yMax: number }
+): any[] => {
+  return points.map(point => {
+    // Calculate the relative position (0-1) within the source domains
+    const xRatio = (point.x - fromDomains.xMin) / (fromDomains.xMax - fromDomains.xMin);
+    const yRatio = (point.y - fromDomains.yMin) / (fromDomains.yMax - fromDomains.yMin);
+    
+    // Map the relative position to the target domains
+    const newX = toDomains.xMin + xRatio * (toDomains.xMax - toDomains.xMin);
+    const newY = toDomains.yMin + yRatio * (toDomains.yMax - toDomains.yMin);
+    
+    // Create a new point with transformed coordinates
+    return {
+      ...point,
+      x: newX,
+      y: newY,
+      _originalX: point.x, // Store original values for reference
+      _originalY: point.y
+    };
+  });
+};
 
 export default function DraggableGraph({ 
   data, 
@@ -73,6 +115,9 @@ export default function DraggableGraph({
   onClick,
   snapToGrid = true,
   settings,
+  allGraphs = [],
+  onDumpPoints,
+  id
 }: DraggableGraphProps) {
   // Store local rotation to ensure UI updates immediately
   const [localRotation, setLocalRotation] = useState(rotation);
@@ -945,6 +990,72 @@ export default function DraggableGraph({
     document.addEventListener('mouseup', onMouseUp);
   }
 
+  // Add new state for overlap detection
+  const [overlappingGraphs, setOverlappingGraphs] = useState<any[]>([]);
+  
+  // Add new function to detect overlaps
+  const detectOverlaps = useCallback(() => {
+    if (!allGraphs || allGraphs.length <= 1) {
+      setOverlappingGraphs([]);
+      return;
+    }
+    
+    // Get the current graph's rectangle
+    const currentRect = {
+      x: position.x,
+      y: position.y,
+      width: size.width,
+      height: size.height
+    };
+    
+    // Find all graphs that overlap with this one and have a lower zIndex
+    const overlaps = allGraphs.filter(graph => 
+      graph.id !== id && 
+      graph.zIndex < zIndex && 
+      doRectanglesOverlap(currentRect, {
+        x: graph.position.x,
+        y: graph.position.y,
+        width: graph.size.width,
+        height: graph.size.height
+      })
+    );
+    
+    setOverlappingGraphs(overlaps);
+  }, [allGraphs, id, position.x, position.y, size.width, size.height, zIndex]);
+  
+  // Use effect to detect overlaps when position, size, or zIndex changes
+  useEffect(() => {
+    detectOverlaps();
+  }, [detectOverlaps, position, size, zIndex, allGraphs]);
+  
+  // Add function to handle dumping points to a lower graph
+  const handleDumpPoints = (toGraphId: string) => {
+    // Find the target graph
+    const targetGraph = allGraphs.find(graph => graph.id === toGraphId);
+    if (!targetGraph || !onDumpPoints) return;
+    
+    // Ensure valid domains for both graphs
+    const sourceDomains = {
+      xMin: scaledDomains.xMin ?? 0,
+      xMax: scaledDomains.xMax ?? 5000,
+      yMin: scaledDomains.yMin ?? 0,
+      yMax: scaledDomains.yMax ?? 5000
+    };
+    
+    const targetDomains = {
+      xMin: targetGraph.domains?.xMin ?? 0,
+      xMax: targetGraph.domains?.xMax ?? 5000,
+      yMin: targetGraph.domains?.yMin ?? 0,
+      yMax: targetGraph.domains?.yMax ?? 5000
+    };
+    
+    // Transform points
+    const transformedPoints = transformPoints(processedData, sourceDomains, targetDomains);
+    
+    // Call the handler with transformed points
+    onDumpPoints(id, toGraphId, transformedPoints);
+  };
+
   // Return the component with error boundary
   return (
     <ErrorBoundary
@@ -1017,6 +1128,38 @@ export default function DraggableGraph({
               <h3 className="font-medium text-gray-800 truncate text-sm">
                 {filename || 'Data Graph'} {!isMinimized && `(${localRotation.toFixed(1)}°)`}
               </h3>
+              
+              {/* Show dump buttons when there are overlapping graphs */}
+              {!isMinimized && overlappingGraphs.length > 0 && (
+                <div className="ml-2 flex space-x-1">
+                  <div className="relative group">
+                    <button
+                      className="px-1.5 py-0.5 bg-purple-500 text-white text-xs rounded hover:bg-purple-600 transition-colors"
+                      title="Dump points to overlapping graph"
+                    >
+                      Dump ↓
+                    </button>
+                    <div className="absolute left-0 top-full mt-1 z-50 bg-white shadow-lg rounded border border-gray-200 py-1 hidden group-hover:block min-w-[120px]">
+                      {overlappingGraphs.map(graph => (
+                        <button
+                          key={graph.id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDumpPoints(graph.id);
+                          }}
+                          className="w-full text-left px-3 py-1.5 hover:bg-gray-100 text-xs flex items-center"
+                        >
+                          <div 
+                            className="w-2 h-2 rounded-full mr-2" 
+                            style={{ backgroundColor: graph.color }}
+                          ></div>
+                          <span className="truncate">{graph.title || 'Graph'}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
             
             {/* Controls */}

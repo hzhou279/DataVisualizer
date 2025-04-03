@@ -369,6 +369,46 @@ export default function Home() {
     ));
   };
 
+  // Handler for dumping points from one graph to another
+  const handleDumpPoints = (fromGraphId: string, toGraphId: string, transformedPoints: any[]) => {
+    // Find the source and target graphs
+    const sourceGraph = graphs.find(g => g.id === fromGraphId);
+    const targetGraph = graphs.find(g => g.id === toGraphId);
+    
+    if (!sourceGraph || !targetGraph) {
+      console.error("Source or target graph not found");
+      return;
+    }
+    
+    // Create a dialog to confirm the operation
+    if (window.confirm(`Dump ${transformedPoints.length} points from "${sourceGraph.title}" to "${targetGraph.title}"?`)) {
+      // Update the target graph with the new points
+      setGraphs(prevGraphs => 
+        prevGraphs.map(graph => {
+          if (graph.id === toGraphId) {
+            // Add a property to identify these points as dumped points
+            const pointsWithSource = transformedPoints.map(point => ({
+              ...point,
+              _source: sourceGraph.title,
+              _sourceId: fromGraphId,
+              _dumpedAt: new Date().toISOString()
+            }));
+            
+            // Combine existing points with new points
+            return {
+              ...graph,
+              data: [...graph.data, ...pointsWithSource]
+            };
+          }
+          return graph;
+        })
+      );
+      
+      // Show success message
+      alert(`Successfully dumped ${transformedPoints.length} points to "${targetGraph.title}"`);
+    }
+  };
+
   const selectedGraph = graphs.find(graph => graph.id === selectedGraphId);
   const selectedDataGraph = graphs.find(graph => graph.id === selectedDataGraphId);
 
@@ -436,6 +476,7 @@ export default function Home() {
                           <DraggableGraph
                             key={graph.id}
                             {...graph}
+                            id={graph.id}
                             filename={graph.title}
                             zIndex={graph.zIndex || 100}
                             onPositionChange={(x, y) => handlePositionUpdate(graph.id, x, y)}
@@ -470,6 +511,8 @@ export default function Home() {
                             }}
                             onClick={() => handleGraphClick(graph.id)}
                             snapToGrid={graph.settings?.snapToGrid !== false}
+                            allGraphs={graphs}
+                            onDumpPoints={handleDumpPoints}
                           />
                         ))
                       ) : (
@@ -495,6 +538,7 @@ export default function Home() {
                         <DraggableGraph
                           key={graph.id}
                           {...graph}
+                          id={graph.id}
                           filename={graph.title}
                           zIndex={graph.zIndex || 100}
                           onPositionChange={(x, y) => handlePositionUpdate(graph.id, x, y)}
@@ -529,6 +573,8 @@ export default function Home() {
                           }}
                           onClick={() => handleGraphClick(graph.id)}
                           snapToGrid={false}
+                          allGraphs={graphs}
+                          onDumpPoints={handleDumpPoints}
                         />
                       ))
                     ) : (
