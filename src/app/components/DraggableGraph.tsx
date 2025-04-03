@@ -104,6 +104,10 @@ export default function DraggableGraph({
   // Reference to the container element
   const containerRef = React.useRef<HTMLDivElement>(null);
 
+  // Track initial render and previous graph ID
+  const initialRenderRef = React.useRef(true);
+  const prevGraphIdRef = React.useRef(data[0]?.id || '');
+
   // Use the grid system with proper typing
   interface GridSystemType {
     gridSize: number;
@@ -298,7 +302,7 @@ export default function DraggableGraph({
     
     // Add small padding for better visualization
     // Even for explicitly set domains, add a bit of padding to avoid points at the edges
-    const paddingFactor = 0.05; // 5% padding
+    const paddingFactor = 0;
     
     const result = {
       xMin: (domainValues.xMin ?? 0) - (xRange * paddingFactor),
@@ -400,6 +404,30 @@ export default function DraggableGraph({
       }
     }
   }, [domains]);
+
+  // Update local state when props change, but only on initial render or graph change
+  useEffect(() => {
+    // Generate a unique identifier for this graph's data
+    const currentGraphId = data[0]?.id || '';
+    
+    // Only update if this is the first render or if the graph has changed
+    if (initialRenderRef.current || prevGraphIdRef.current !== currentGraphId) {
+      // Update local states if they actually changed
+      setLocalColor(color);
+      setLocalRotation(rotation);
+      setRotationValue(rotation.toString());
+      setLocalDomains({
+        xMin: domains?.xMin,
+        xMax: domains?.xMax,
+        yMin: domains?.yMin,
+        yMax: domains?.yMax
+      });
+      
+      // Mark initial render as completed
+      initialRenderRef.current = false;
+      prevGraphIdRef.current = currentGraphId;
+    }
+  }, [color, rotation, domains, data]);
 
   const handleRotationInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setRotationValue(e.target.value);
@@ -793,8 +821,8 @@ export default function DraggableGraph({
         };
         
         // Add small padding to ensure points don't sit on the edge
-        const xPadding = (domainValues.xMax - domainValues.xMin) * 0.05;
-        const yPadding = (domainValues.yMax - domainValues.yMin) * 0.05;
+        const xPadding = (domainValues.xMax - domainValues.xMin) * 0;
+        const yPadding = (domainValues.yMax - domainValues.yMin) * 0;
         
         setScaledDomains({
           xMin: domainValues.xMin - xPadding,

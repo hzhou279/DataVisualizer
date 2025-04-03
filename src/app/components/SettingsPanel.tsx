@@ -34,6 +34,22 @@ const formatNumber = (num: number): string => {
   }
 };
 
+// Helper function for deep compare of objects
+const isEqual = (obj1: any, obj2: any): boolean => {
+  if (obj1 === obj2) return true;
+  
+  if (typeof obj1 !== 'object' || typeof obj2 !== 'object' || obj1 === null || obj2 === null) {
+    return obj1 === obj2;
+  }
+  
+  const keys1 = Object.keys(obj1);
+  const keys2 = Object.keys(obj2);
+  
+  if (keys1.length !== keys2.length) return false;
+  
+  return keys1.every(key => isEqual(obj1[key], obj2[key]));
+};
+
 export default function SettingsPanel({ graph, onClose, onSettingsUpdate }: SettingsPanelProps) {
   // Calculate actual data ranges from graph data using memoization
   const dataRanges = useMemo(() => {
@@ -127,31 +143,45 @@ export default function SettingsPanel({ graph, onClose, onSettingsUpdate }: Sett
     snapToGrid: graph.settings?.snapToGrid !== undefined ? graph.settings.snapToGrid : true,
   });
 
-  // Update local state when graph props change
+  // Track if this is the initial render
+  const initialRenderRef = React.useRef(true);
+
+  // Update local state when graph props change, but only on initial load
   useEffect(() => {
-    setLocalState({
-      width: graph.size.width,
-      height: graph.size.height,
-      rotation: graph.rotation,
-      color: graph.color,
-      // Preserve full precision of domain values
-      xMin: graph.domains?.xMin !== undefined ? String(graph.domains.xMin) : '',
-      xMax: graph.domains?.xMax !== undefined ? String(graph.domains.xMax) : '',
-      yMin: graph.domains?.yMin !== undefined ? String(graph.domains.yMin) : '',
-      yMax: graph.domains?.yMax !== undefined ? String(graph.domains.yMax) : '',
-      xIntervals: graph.axisIntervals?.x?.toString() || '5',
-      yIntervals: graph.axisIntervals?.y?.toString() || '5',
-      quadrantMode: graph.quadrantMode || 'first',
-      showGrid: graph.settings?.showGrid !== undefined ? graph.settings.showGrid : true,
-      dotSize: graph.settings?.dotSize !== undefined ? graph.settings.dotSize : 5,
-      showLabels: graph.settings?.showLabels !== undefined ? graph.settings.showLabels : true,
-      globalX: graph.globalCoordinate?.x?.toString() || '0',
-      globalY: graph.globalCoordinate?.y?.toString() || '0',
-      rotationCenterX: graph.rotationCenter?.x?.toString() || '0',
-      rotationCenterY: graph.rotationCenter?.y?.toString() || '0',
-      snapToGrid: graph.settings?.snapToGrid !== undefined ? graph.settings.snapToGrid : true,
-    });
+    // Only run this effect on initial render or when graph ID changes
+    // This prevents local state from being reset while user is editing
+    if (initialRenderRef.current || prevGraphId.current !== graph.id) {
+      const newState = {
+        width: graph.size.width,
+        height: graph.size.height,
+        rotation: graph.rotation,
+        color: graph.color,
+        // Preserve full precision of domain values
+        xMin: graph.domains?.xMin !== undefined ? String(graph.domains.xMin) : '',
+        xMax: graph.domains?.xMax !== undefined ? String(graph.domains.xMax) : '',
+        yMin: graph.domains?.yMin !== undefined ? String(graph.domains.yMin) : '',
+        yMax: graph.domains?.yMax !== undefined ? String(graph.domains.yMax) : '',
+        xIntervals: graph.axisIntervals?.x?.toString() || '5',
+        yIntervals: graph.axisIntervals?.y?.toString() || '5',
+        quadrantMode: graph.quadrantMode || 'first',
+        showGrid: graph.settings?.showGrid !== undefined ? graph.settings.showGrid : true,
+        dotSize: graph.settings?.dotSize !== undefined ? graph.settings.dotSize : 5,
+        showLabels: graph.settings?.showLabels !== undefined ? graph.settings.showLabels : true,
+        globalX: graph.globalCoordinate?.x?.toString() || '0',
+        globalY: graph.globalCoordinate?.y?.toString() || '0',
+        rotationCenterX: graph.rotationCenter?.x?.toString() || '0',
+        rotationCenterY: graph.rotationCenter?.y?.toString() || '0',
+        snapToGrid: graph.settings?.snapToGrid !== undefined ? graph.settings.snapToGrid : true,
+      };
+      
+      setLocalState(newState);
+      initialRenderRef.current = false;
+      prevGraphId.current = graph.id;
+    }
   }, [graph]);
+
+  // Keep track of previous graph ID to detect changes
+  const prevGraphId = React.useRef(graph.id);
 
   // Handle input changes
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -215,11 +245,39 @@ export default function SettingsPanel({ graph, onClose, onSettingsUpdate }: Sett
   };
 
   const handleApply = () => {
+    // Include all settings from local state, not just changed ones
+    const updatedSettings: Partial<Graph> = {
+      size: { 
+        width: parseFloat(localState.width.toString()) || graph.size.width, 
+        height: parseFloat(localState.height.toString()) || graph.size.height 
+      },
+      rotation: parseFloat(localState.rotation.toString()) || 0,
+      color: localState.color,
+      settings: {
+        showGrid: localState.showGrid,
+        dotSize: parseInt(localState.dotSize.toString()) || 5,
+        showLabels: localState.showLabels,
+        snapToGrid: localState.snapToGrid
+      },
+      quadrantMode: localState.quadrantMode as 'first' | 'all',
+      axisIntervals: {
+        x: Math.max(1, parseInt(localState.xIntervals) || 5),
+        y: Math.max(1, parseInt(localState.yIntervals) || 5)
+      },
+      globalCoordinate: {
+        x: parseFloat(localState.globalX) || 0,
+        y: parseFloat(localState.globalY) || 0
+      },
+      rotationCenter: {
+        x: parseFloat(localState.rotationCenterX) || 0,
+        y: parseFloat(localState.rotationCenterY) || 0
+      }
+    };
+
+    // Handle domains specially - only include if they have values
     const domains: any = {};
     
-    // Only include defined values for axis ranges - preserve exact values
     if (localState.xMin !== '') {
-      // Use parseFloat directly to keep full precision
       domains.xMin = parseFloat(localState.xMin);
     }
     
@@ -235,44 +293,14 @@ export default function SettingsPanel({ graph, onClose, onSettingsUpdate }: Sett
       domains.yMax = parseFloat(localState.yMax);
     }
     
-    // Ensure we have valid interval values
-    const axisIntervals = {
-      x: Math.max(1, parseInt(localState.xIntervals) || 5),
-      y: Math.max(1, parseInt(localState.yIntervals) || 5)
-    };
+    if (Object.keys(domains).length > 0) {
+      updatedSettings.domains = domains;
+    }
     
-    // Parse global coordinate and rotation center - preserve exact values
-    const globalCoordinate = {
-      x: parseFloat(localState.globalX) || 0,
-      y: parseFloat(localState.globalY) || 0
-    };
+    // Apply all settings
+    onSettingsUpdate(updatedSettings);
     
-    const rotationCenter = {
-      x: parseFloat(localState.rotationCenterX) || 0,
-      y: parseFloat(localState.rotationCenterY) || 0
-    };
-    
-    onSettingsUpdate({
-      size: { 
-        width: parseFloat(localState.width.toString()) || graph.size.width, 
-        height: parseFloat(localState.height.toString()) || graph.size.height 
-      },
-      rotation: parseFloat(localState.rotation.toString()) || 0,
-      color: localState.color,
-      domains: Object.keys(domains).length > 0 ? domains : undefined,
-      axisIntervals,
-      quadrantMode: localState.quadrantMode as 'first' | 'all',
-      settings: {
-        showGrid: localState.showGrid,
-        dotSize: parseInt(localState.dotSize.toString()) || 5,
-        showLabels: localState.showLabels,
-        snapToGrid: localState.snapToGrid
-      },
-      globalCoordinate,
-      rotationCenter
-    });
-    
-    // Automatically close the panel after applying changes
+    // Automatically close the panel
     onClose();
   };
 

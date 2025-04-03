@@ -121,23 +121,23 @@ export function parseCSVData(data: any[]): ParsedData[] {
   // Calculate if we need to use four quadrants
   const shouldUseFourQuadrants = xMin < 0 || yMin < 0;
   
-  // Calculate rounded domain values
+  // Calculate domain values without rounding
   let domains;
   if (shouldUseFourQuadrants) {
-    // For four quadrants, ensure we include zero and round outward
+    // For four quadrants, use exact values
     domains = {
-      xMin: roundDomainValue(xMin, true),
-      xMax: roundDomainValue(xMax, false),
-      yMin: roundDomainValue(yMin, true),
-      yMax: roundDomainValue(yMax, false)
+      xMin: xMin,
+      xMax: xMax,
+      yMin: yMin,
+      yMax: yMax
     };
   } else {
     // For first quadrant only
     domains = {
       xMin: 0,
-      xMax: roundDomainValue(xMax, false),
+      xMax: xMax,
       yMin: 0,
-      yMax: roundDomainValue(yMax, false)
+      yMax: yMax
     };
   }
   

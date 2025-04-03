@@ -52,6 +52,21 @@ export default function Home() {
   const [showGrid, setShowGrid] = useState(true);
   const [gridSize, setGridSize] = useState(50);
   const [showGridLabels, setShowGridLabels] = useState(true);
+  const [colorIndex, setColorIndex] = useState(0);
+  
+  // Array of distinct colors for graphs
+  const graphColors = [
+    '#3b82f6', // Blue
+    '#ef4444', // Red
+    '#10b981', // Green
+    '#8b5cf6', // Purple
+    '#f59e0b', // Amber
+    '#6366f1', // Indigo
+    '#ec4899', // Pink
+    '#14b8a6', // Teal
+    '#f97316', // Orange
+    '#a855f7'  // Violet
+  ];
 
   const handleFileProcessed = (parsedData: ParsedData[], fileName: string) => {
     if (parsedData.length === 0) {
@@ -73,8 +88,12 @@ export default function Home() {
     setZIndexCounter(prev => prev + 1);
     
     // Use fixed reasonable sizes
-    const initialWidth = 500;
-    const initialHeight = 400;
+    const initialWidth = 600;
+    const initialHeight = 600;
+    
+    // Get current color and increment color index
+    const currentColor = graphColors[colorIndex];
+    setColorIndex((colorIndex + 1) % graphColors.length);
     
     // Create a new Graph object
     const newGraph: Graph = {
@@ -84,7 +103,7 @@ export default function Home() {
       position: getNextGraphPosition(graphs),
       size: { width: initialWidth, height: initialHeight },
       rotation: 0,
-      color: '#3b82f6',
+      color: currentColor,
       axisIntervals: { x: 5, y: 5 },
       quadrantMode: quadrantMode as QuadrantMode,
       domains,
@@ -193,15 +212,18 @@ export default function Home() {
             const currentGlobal = graph.globalCoordinate || { x: 0, y: 0 };
             const newGlobal = updatedProps.globalCoordinate;
             
-            // Calculate position delta based on global coordinate change
-            const deltaX = newGlobal.x - currentGlobal.x;
-            const deltaY = newGlobal.y - currentGlobal.y;
-            
-            // Update position to maintain the same visual position with new global coordinates
-            updatedGraph.position = {
-              x: graph.position.x + deltaX,
-              y: graph.position.y + deltaY
-            };
+            // Check if global coordinates actually changed to avoid unnecessary updates
+            if (newGlobal.x !== currentGlobal.x || newGlobal.y !== currentGlobal.y) {
+              // Calculate position delta based on global coordinate change
+              const deltaX = newGlobal.x - currentGlobal.x;
+              const deltaY = newGlobal.y - currentGlobal.y;
+              
+              // Update position to maintain the same visual position with new global coordinates
+              updatedGraph.position = {
+                x: graph.position.x + deltaX,
+                y: graph.position.y + deltaY
+              };
+            }
           }
           
           if (updatedProps.data && updatedProps.data[0]?.domains) {
@@ -302,7 +324,11 @@ export default function Home() {
   const handleSettingsUpdate = (settings: any) => {
     if (!selectedGraphId) return;
     
-    // Use handleGraphUpdate to ensure proper handling of global coordinates
+    // Find the selected graph
+    const graph = graphs.find(g => g.id === selectedGraphId);
+    if (!graph) return;
+    
+    // Use handleGraphUpdate to apply all settings without checking for changes
     handleGraphUpdate(selectedGraphId, settings);
     
     // Reset selected graph ID after applying settings
