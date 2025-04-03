@@ -233,8 +233,19 @@ export default function DraggableGraph({
 
   // Process data for rendering all points efficiently
   const processedData = useMemo(() => {
-    // Return all data points regardless of size
-    return data;
+    // Filter out any invalid data points before rendering
+    if (!data || data.length === 0) return [];
+    
+    return data.filter(point => 
+      point !== null && 
+      point !== undefined && 
+      typeof point.x === 'number' && 
+      typeof point.y === 'number' && 
+      !isNaN(point.x) && 
+      !isNaN(point.y) &&
+      isFinite(point.x) && 
+      isFinite(point.y)
+    );
   }, [data]);
 
   // Use WebGL for large datasets if available
@@ -262,71 +273,131 @@ export default function DraggableGraph({
 
   // Memoize domain calculations to avoid recalculating on every render
   const calculatedDomains = useMemo(() => {
-    if (!data || data.length === 0) return scaledDomains;
+    // If no data or empty array, use safe default domains
+    if (!data || data.length === 0) {
+      return {
+        xMin: 0,
+        xMax: 5000,
+        yMin: 0,
+        yMax: 5000
+      };
+    }
     
-    // Calculate the data ranges from the full dataset (not the sampled one)
-    const xValues = data.map(point => point.x);
-    const yValues = data.map(point => point.y);
-    
-    const dataMin = {
-      x: Math.min(...xValues),
-      y: Math.min(...yValues)
-    };
-    
-    const dataMax = {
-      x: Math.max(...xValues),
-      y: Math.max(...yValues)
-    };
-    
-    // Check if we have explicitly set domains
-    const hasExplicitXMin = localDomains.xMin !== undefined;
-    const hasExplicitXMax = localDomains.xMax !== undefined;
-    const hasExplicitYMin = localDomains.yMin !== undefined;
-    const hasExplicitYMax = localDomains.yMax !== undefined;
-    
-    // Use provided domains but ensure all data points are included
-    // For explicitly set domains, take the more inclusive value between
-    // the user-specified domain and the actual data range
-    const domainValues = {
-      xMin: hasExplicitXMin ? Math.min(localDomains.xMin as number, dataMin.x) : 
-            (quadrantMode === 'all' ? Math.min(dataMin.x, 0) : (dataMin.x < 0 ? dataMin.x : 0)),
-      xMax: hasExplicitXMax ? Math.max(localDomains.xMax as number, dataMax.x) : dataMax.x,
-      yMin: hasExplicitYMin ? Math.min(localDomains.yMin as number, dataMin.y) : 
-            (quadrantMode === 'all' ? Math.min(dataMin.y, 0) : (dataMin.y < 0 ? dataMin.y : 0)),
-      yMax: hasExplicitYMax ? Math.max(localDomains.yMax as number, dataMax.y) : dataMax.y
-    };
-    
-    // Calculate data ranges to determine appropriate padding
-    const xRange = (domainValues.xMax ?? 0) - (domainValues.xMin ?? 0);
-    const yRange = (domainValues.yMax ?? 0) - (domainValues.yMin ?? 0);
-    
-    // Add small padding for better visualization
-    // Even for explicitly set domains, add a bit of padding to avoid points at the edges
-    const paddingFactor = 0;
-    
-    const result = {
-      xMin: (domainValues.xMin ?? 0) - (xRange * paddingFactor),
-      xMax: (domainValues.xMax ?? 0) + (xRange * paddingFactor),
-      yMin: (domainValues.yMin ?? 0) - (yRange * paddingFactor),
-      yMax: (domainValues.yMax ?? 0) + (yRange * paddingFactor)
-    };
-    
-    return result;
-  }, [data, localDomains, quadrantMode]);
+    try {
+      // Filter to valid numeric data points only
+      const validData = data.filter(point => 
+        point !== null && 
+        point !== undefined && 
+        typeof point.x === 'number' && 
+        typeof point.y === 'number' && 
+        !isNaN(point.x) && 
+        !isNaN(point.y) &&
+        isFinite(point.x) && 
+        isFinite(point.y)
+      );
+      
+      // If no valid data points, use safe default domains
+      if (validData.length === 0) {
+        return {
+          xMin: 0,
+          xMax: 5000,
+          yMin: 0,
+          yMax: 5000
+        };
+      }
+      
+      // Calculate the data ranges from the valid data points
+      const xValues = validData.map(point => point.x);
+      const yValues = validData.map(point => point.y);
+      
+      const dataMin = {
+        x: Math.min(...xValues),
+        y: Math.min(...yValues)
+      };
+      
+      const dataMax = {
+        x: Math.max(...xValues),
+        y: Math.max(...yValues)
+      };
+      
+      // Check if data contains negative values
+      const hasNegativeValues = dataMin.x < 0 || dataMin.y < 0;
+      
+      // Determine domains based on whether we have explicitly set values or need to calculate them
+      let domainValues;
+      
+      if (hasNegativeValues) {
+        // For data with negative values, ensure max_x - min_x = max_y - min_y = 5000
+        // Calculate centers of the current data range
+        const xCenter = (dataMax.x + dataMin.x) / 2;
+        const yCenter = (dataMax.y + dataMin.y) / 2;
+        
+        // Set the half-width to ensure range is 5000
+        const halfWidth = 2500;
+        
+        domainValues = {
+          xMin: xCenter - halfWidth,
+          xMax: Math.max(xCenter + halfWidth, xCenter - halfWidth + 1), // Ensure xMax > xMin
+          yMin: yCenter - halfWidth,
+          yMax: Math.max(yCenter + halfWidth, yCenter - halfWidth + 1)  // Ensure yMax > yMin
+        };
+        
+        // Add a small buffer if ranges are too small
+        if (domainValues.xMax - domainValues.xMin < 10) {
+          domainValues.xMax = domainValues.xMin + 10;
+        }
+        if (domainValues.yMax - domainValues.yMin < 10) {
+          domainValues.yMax = domainValues.yMin + 10;
+        }
+      } else {
+        // For non-negative values, range should be [0, 5000]
+        domainValues = {
+          xMin: 0,
+          xMax: 5000,
+          yMin: 0,
+          yMax: 5000
+        };
+      }
+      
+      return {
+        xMin: domainValues.xMin,
+        xMax: domainValues.xMax,
+        yMin: domainValues.yMin,
+        yMax: domainValues.yMax
+      };
+    } catch (error) {
+      console.error("Error calculating domains:", error);
+      // Fallback to safe defaults
+      return {
+        xMin: 0,
+        xMax: 5000,
+        yMin: 0,
+        yMax: 5000
+      };
+    }
+  }, [data]);
 
   // Update scaled domains when domains are calculated
   useEffect(() => {
-    setScaledDomains(calculatedDomains);
+    // Ensure the domains are valid (min < max)
+    const sanitizedDomains = {
+      xMin: calculatedDomains.xMin ?? 0,
+      xMax: Math.max(calculatedDomains.xMax ?? 5000, (calculatedDomains.xMin ?? 0) + 1),
+      yMin: calculatedDomains.yMin ?? 0,
+      yMax: Math.max(calculatedDomains.yMax ?? 5000, (calculatedDomains.yMin ?? 0) + 1)
+    };
+    
+    setScaledDomains(sanitizedDomains);
     
     // Notify parent component of domain changes when auto-calculated
     // Only do this when domains are calculated automatically (first load or significant data changes)
     if (onDomainsChange && data && data.length > 0 && !domains) {
       // Report the calculated domains without padding to make them more intuitive for users
       const dataDomains = {
-        xMin: calculatedDomains.xMin,
-        xMax: calculatedDomains.xMax,
-        yMin: calculatedDomains.yMin,
-        yMax: calculatedDomains.yMax
+        xMin: sanitizedDomains.xMin,
+        xMax: sanitizedDomains.xMax,
+        yMin: sanitizedDomains.yMin,
+        yMax: sanitizedDomains.yMax
       };
       
       onDomainsChange(dataDomains);
@@ -799,37 +870,95 @@ export default function DraggableGraph({
         onSizeChange(newWidth, newHeight);
         
         // Trigger recalculation of axes and domains when resizing
-        const xValues = data.map(point => point.x);
-        const yValues = data.map(point => point.y);
-        
-        const dataMin = {
-          x: Math.min(...xValues),
-          y: Math.min(...yValues)
-        };
-        
-        const dataMax = {
-          x: Math.max(...xValues),
-          y: Math.max(...yValues)
-        };
-        
-        // Use provided domains or calculate from data
-        const domainValues = {
-          xMin: localDomains.xMin !== undefined ? localDomains.xMin : (quadrantMode === 'all' ? Math.min(dataMin.x, 0) : (dataMin.x < 0 ? dataMin.x : 0)),
-          xMax: localDomains.xMax !== undefined ? localDomains.xMax : dataMax.x,
-          yMin: localDomains.yMin !== undefined ? localDomains.yMin : (quadrantMode === 'all' ? Math.min(dataMin.y, 0) : (dataMin.y < 0 ? dataMin.y : 0)),
-          yMax: localDomains.yMax !== undefined ? localDomains.yMax : dataMax.y
-        };
-        
-        // Add small padding to ensure points don't sit on the edge
-        const xPadding = (domainValues.xMax - domainValues.xMin) * 0;
-        const yPadding = (domainValues.yMax - domainValues.yMin) * 0;
-        
-        setScaledDomains({
-          xMin: domainValues.xMin - xPadding,
-          xMax: domainValues.xMax + xPadding,
-          yMin: domainValues.yMin - yPadding,
-          yMax: domainValues.yMax + yPadding
-        });
+        if (data && data.length > 0) {
+          try {
+            // Filter to valid numeric data points only
+            const validData = data.filter(point => 
+              point !== null && 
+              point !== undefined && 
+              typeof point.x === 'number' && 
+              typeof point.y === 'number' && 
+              !isNaN(point.x) && 
+              !isNaN(point.y) &&
+              isFinite(point.x) && 
+              isFinite(point.y)
+            );
+            
+            // If no valid data points, use safe default domains
+            if (validData.length === 0) {
+              setScaledDomains({
+                xMin: 0,
+                xMax: 5000,
+                yMin: 0,
+                yMax: 5000
+              });
+              return;
+            }
+            
+            const xValues = validData.map(point => point.x);
+            const yValues = validData.map(point => point.y);
+            
+            const dataMin = {
+              x: Math.min(...xValues),
+              y: Math.min(...yValues)
+            };
+            
+            const dataMax = {
+              x: Math.max(...xValues),
+              y: Math.max(...yValues)
+            };
+            
+            // Check if data contains negative values
+            const hasNegativeValues = dataMin.x < 0 || dataMin.y < 0;
+            
+            // Determine domains based on whether we have negative values
+            let domainValues;
+            
+            if (hasNegativeValues) {
+              // For data with negative values, ensure max_x - min_x = max_y - min_y = 5000
+              // Calculate centers of the current data range
+              const xCenter = (dataMax.x + dataMin.x) / 2;
+              const yCenter = (dataMax.y + dataMin.y) / 2;
+              
+              // Set the half-width to ensure range is 5000
+              const halfWidth = 2500;
+              
+              domainValues = {
+                xMin: xCenter - halfWidth,
+                xMax: Math.max(xCenter + halfWidth, xCenter - halfWidth + 1), // Ensure xMax > xMin
+                yMin: yCenter - halfWidth,
+                yMax: Math.max(yCenter + halfWidth, yCenter - halfWidth + 1)  // Ensure yMax > yMin
+              };
+              
+              // Add a small buffer if ranges are too small
+              if (domainValues.xMax - domainValues.xMin < 10) {
+                domainValues.xMax = domainValues.xMin + 10;
+              }
+              if (domainValues.yMax - domainValues.yMin < 10) {
+                domainValues.yMax = domainValues.yMin + 10;
+              }
+            } else {
+              // For non-negative values, range should be [0, 5000]
+              domainValues = {
+                xMin: 0,
+                xMax: 5000,
+                yMin: 0,
+                yMax: 5000
+              };
+            }
+            
+            setScaledDomains(domainValues);
+          } catch (error) {
+            console.error("Error calculating domains during resize:", error);
+            // Use safe defaults on error
+            setScaledDomains({
+              xMin: 0,
+              xMax: 5000,
+              yMin: 0,
+              yMax: 5000
+            });
+          }
+        }
       }
     }
     
@@ -1025,193 +1154,240 @@ export default function DraggableGraph({
                 backgroundColor: "transparent" // Completely transparent background
               }}
             >
-              <ResponsiveContainer 
-                key={chartKey}
-                width="100%" 
-                height="100%"
-                debounce={50}
-                minHeight={50}
-                aspect={undefined}
-                onResize={(width, height) => {
-                  if (width && height) {
-                    setContentSize({ width, height });
-                  }
-                }}
-              >
-                <ScatterChart 
-                  margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
-                  style={{ background: "transparent" }} // Make chart background transparent
+              {processedData.length > 0 ? (
+                <ResponsiveContainer 
+                  key={chartKey}
+                  width="100%" 
+                  height="100%"
+                  debounce={50}
+                  minHeight={50}
+                  aspect={undefined}
+                  onResize={(width, height) => {
+                    if (width && height && width > 0 && height > 0) {
+                      setContentSize({ width, height });
+                    }
+                  }}
                 >
-                  {/* Simplified CartesianGrid approach to eliminate rendering issues */}
-                  <CartesianGrid 
-                    stroke="rgba(0,0,0,0.15)" 
-                    strokeDasharray="0"
-                    strokeWidth={data && data.length > 1000 ? 0.5 : 1}
-                  />
-                  <XAxis 
-                    type="number" 
-                    dataKey="x" 
-                    xAxisId={0}
-                    domain={[scaledDomains.xMin ?? 0, scaledDomains.xMax ?? 100]} 
-                    allowDataOverflow={false}
-                    includeHidden={true}
-                    allowDecimals={true}
-                    // Generate nice ticks for better readability
-                    ticks={(() => {
-                      const min = scaledDomains.xMin ?? 0;
-                      const max = scaledDomains.xMax ?? 100;
-                      
-                      // Use axisIntervals prop instead of fixed count
-                      const intervalCount = axisIntervals?.x || 5; // Default to 5 intervals if not provided
-                      
-                      // Generate exactly intervalCount+1 ticks for intervalCount intervals
-                      if (intervalCount <= 1) {
-                        return [min, max]; // Minimum 2 ticks (1 interval)
-                      }
-                      
-                      // Calculate exact step size without rounding to ensure exact interval count
-                      const exactStepSize = (max - min) / intervalCount;
-                      
-                      // Generate ticks with exact interval count
-                      const ticks = [];
-                      for (let i = 0; i <= intervalCount; i++) {
-                        const value = min + (exactStepSize * i);
-                        ticks.push(parseFloat(value.toFixed(10))); // Fix floating point precision issues
-                      }
-                      
-                      return ticks;
-                    })()}
-                    padding={{ left: 0, right: 0 }}
-                    axisLine={{ stroke: '#000', strokeWidth: 1.5 }}
-                    scale="linear"
-                    // Remove interval specification to avoid conflict with ticks
-                    // Reduce font size for better performance with large datasets
-                    tick={{ fontSize: data && data.length > 1000 ? 10 : 12 }}
-                    // Format ticks to avoid long decimal values
-                    tickFormatter={(value) => {
-                      // For integers or values close to integers
-                      if (Math.abs(value - Math.round(value)) < 0.001) {
-                        return Math.round(value).toString();
-                      }
-                      // For other values, limit decimal places
-                      return value.toFixed(1);
-                    }}
-                  />
-                  <YAxis 
-                    type="number"
-                    dataKey="y"
-                    yAxisId={0}
-                    domain={[scaledDomains.yMin ?? 0, scaledDomains.yMax ?? 100]}
-                    allowDataOverflow={false}
-                    includeHidden={true}
-                    allowDecimals={true}
-                    // Generate nice ticks for better readability
-                    ticks={(() => {
-                      const min = scaledDomains.yMin ?? 0;
-                      const max = scaledDomains.yMax ?? 100;
-                      
-                      // Use axisIntervals prop instead of fixed count
-                      const intervalCount = axisIntervals?.y || 5; // Default to 5 intervals if not provided
-                      
-                      // Generate exactly intervalCount+1 ticks for intervalCount intervals
-                      if (intervalCount <= 1) {
-                        return [min, max]; // Minimum 2 ticks (1 interval)
-                      }
-                      
-                      // Calculate exact step size without rounding to ensure exact interval count
-                      const exactStepSize = (max - min) / intervalCount;
-                      
-                      // Generate ticks with exact interval count
-                      const ticks = [];
-                      for (let i = 0; i <= intervalCount; i++) {
-                        const value = min + (exactStepSize * i);
-                        ticks.push(parseFloat(value.toFixed(10))); // Fix floating point precision issues
-                      }
-                      
-                      return ticks;
-                    })()}
-                    padding={{ top: 0, bottom: 0 }}
-                    axisLine={{ stroke: '#000', strokeWidth: 1.5 }}
-                    scale="linear"
-                    // Reduce font size for better performance with large datasets
-                    tick={{ fontSize: data && data.length > 1000 ? 10 : 12 }}
-                    // Format ticks to avoid long decimal values
-                    tickFormatter={(value) => {
-                      // For integers or values close to integers
-                      if (Math.abs(value - Math.round(value)) < 0.001) {
-                        return Math.round(value).toString();
-                      }
-                      // For other values, limit decimal places
-                      return value.toFixed(1);
-                    }}
-                  />
-                  <Tooltip 
-                    contentStyle={{ backgroundColor: 'white', borderRadius: '4px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }}
-                    // Throttle tooltip updates for better performance with large datasets
-                    isAnimationActive={data ? data.length <= 500 : true}
-                    cursor={{ strokeDasharray: '3 3', stroke: 'rgba(50,50,50,0.4)' }}
-                    // Custom content renderer for better performance
-                    content={({ active, payload }) => {
-                      if (!active || !payload || !payload.length) {
-                        return null;
-                      }
-                      
-                      // Simple lightweight tooltip for large datasets
-                      const point = payload[0].payload;
-                      return (
-                        <div className="custom-tooltip" style={{
-                          backgroundColor: 'white',
-                          padding: '8px 12px',
-                          border: '1px solid #ccc',
-                          borderRadius: '4px',
-                          boxShadow: '0 2px 5px rgba(0,0,0,0.1)'
-                        }}>
-                          <p className="tooltip-x"><strong>X:</strong> {point.x}</p>
-                          <p className="tooltip-y"><strong>Y:</strong> {point.y}</p>
-                        </div>
-                      );
-                    }}
-                  />
-                  <Scatter 
-                    name="Data Points"
-                    data={processedData}
-                    fill={color}
-                    stroke={color}
-                    strokeWidth={2}
-                    fillOpacity={0.8}
-                    strokeOpacity={0.9}
-                    shape={(props: any) => {
-                      // Custom shape for optimal performance
-                      const { cx, cy } = props;
-                      return (
-                        <circle 
-                          cx={cx} 
-                          cy={cy} 
-                          r={renderStrategy.pointSize} 
-                          fill={color}
-                          fillOpacity={0.8}
-                          stroke={color}
-                          strokeWidth={1.5}
-                          strokeOpacity={0.9}
-                        />
-                      );
-                    }}
-                  />
-                  {/* Filter for glow effect */}
-                  <defs>
-                    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
-                      <feGaussianBlur stdDeviation="2" result="blur" />
-                      <feComposite in="SourceGraphic" in2="blur" operator="over" />
-                    </filter>
-                  </defs>
-                  {quadrantMode === 'all' && (
-                    <>
-                      <ReferenceLine x={0} stroke="rgba(0,0,0,0.5)" strokeWidth={1} ifOverflow="extendDomain" />
-                      <ReferenceLine y={0} stroke="rgba(0,0,0,0.5)" strokeWidth={1} ifOverflow="extendDomain" />
-                    </>
-                  )}
-                </ScatterChart>
-              </ResponsiveContainer>
+                  <ScatterChart 
+                    margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
+                    style={{ background: "transparent" }} // Make chart background transparent
+                  >
+                    {/* Simplified CartesianGrid approach to eliminate rendering issues */}
+                    <CartesianGrid 
+                      stroke="rgba(0,0,0,0.15)" 
+                      strokeDasharray="0"
+                      strokeWidth={data && data.length > 1000 ? 0.5 : 1}
+                    />
+                    <XAxis 
+                      type="number" 
+                      dataKey="x" 
+                      xAxisId={0}
+                      domain={[
+                        scaledDomains.xMin ?? 0, 
+                        Math.max((scaledDomains.xMax ?? 5000), (scaledDomains.xMin ?? 0) + 1)
+                      ]} 
+                      allowDataOverflow={false}
+                      includeHidden={true}
+                      allowDecimals={true}
+                      // Generate nice ticks for better readability
+                      ticks={(() => {
+                        const min = scaledDomains.xMin ?? 0;
+                        const max = scaledDomains.xMax ?? 5000;
+                        
+                        // Ensure max > min to avoid rendering errors
+                        const safeMax = Math.max(max, min + 1);
+                        
+                        // Use axisIntervals prop instead of fixed count
+                        const intervalCount = axisIntervals?.x || 5; // Default to 5 intervals if not provided
+                        
+                        // Generate exactly intervalCount+1 ticks for intervalCount intervals
+                        if (intervalCount <= 1) {
+                          return [min, safeMax]; // Minimum 2 ticks (1 interval)
+                        }
+                        
+                        // Calculate exact step size without rounding to ensure exact interval count
+                        const exactStepSize = (safeMax - min) / intervalCount;
+                        
+                        // Generate ticks with exact interval count
+                        const ticks = [];
+                        for (let i = 0; i <= intervalCount; i++) {
+                          const value = min + (exactStepSize * i);
+                          ticks.push(parseFloat(value.toFixed(10))); // Fix floating point precision issues
+                        }
+                        
+                        return ticks;
+                      })()}
+                      padding={{ left: 0, right: 0 }}
+                      axisLine={{ stroke: '#000', strokeWidth: 1.5 }}
+                      scale="linear"
+                      // Remove interval specification to avoid conflict with ticks
+                      // Reduce font size for better performance with large datasets
+                      tick={{ fontSize: data && data.length > 1000 ? 10 : 12 }}
+                      // Format ticks to avoid long decimal values
+                      tickFormatter={(value) => {
+                        // For integers or values close to integers
+                        if (Math.abs(value - Math.round(value)) < 0.001) {
+                          return Math.round(value).toString();
+                        }
+                        // For other values, limit decimal places
+                        return value.toFixed(1);
+                      }}
+                    />
+                    <YAxis 
+                      type="number"
+                      dataKey="y"
+                      yAxisId={0}
+                      domain={[
+                        scaledDomains.yMin ?? 0, 
+                        Math.max((scaledDomains.yMax ?? 5000), (scaledDomains.yMin ?? 0) + 1)
+                      ]}
+                      allowDataOverflow={false}
+                      includeHidden={true}
+                      allowDecimals={true}
+                      // Generate nice ticks for better readability
+                      ticks={(() => {
+                        const min = scaledDomains.yMin ?? 0;
+                        const max = scaledDomains.yMax ?? 5000;
+                        
+                        // Ensure max > min to avoid rendering errors
+                        const safeMax = Math.max(max, min + 1);
+                        
+                        // Use axisIntervals prop instead of fixed count
+                        const intervalCount = axisIntervals?.y || 5; // Default to 5 intervals if not provided
+                        
+                        // Generate exactly intervalCount+1 ticks for intervalCount intervals
+                        if (intervalCount <= 1) {
+                          return [min, safeMax]; // Minimum 2 ticks (1 interval)
+                        }
+                        
+                        // Calculate exact step size without rounding to ensure exact interval count
+                        const exactStepSize = (safeMax - min) / intervalCount;
+                        
+                        // Generate ticks with exact interval count
+                        const ticks = [];
+                        for (let i = 0; i <= intervalCount; i++) {
+                          const value = min + (exactStepSize * i);
+                          ticks.push(parseFloat(value.toFixed(10))); // Fix floating point precision issues
+                        }
+                        
+                        return ticks;
+                      })()}
+                      padding={{ top: 0, bottom: 0 }}
+                      axisLine={{ stroke: '#000', strokeWidth: 1.5 }}
+                      scale="linear"
+                      // Reduce font size for better performance with large datasets
+                      tick={{ fontSize: data && data.length > 1000 ? 10 : 12 }}
+                      // Format ticks to avoid long decimal values
+                      tickFormatter={(value) => {
+                        // For integers or values close to integers
+                        if (Math.abs(value - Math.round(value)) < 0.001) {
+                          return Math.round(value).toString();
+                        }
+                        // For other values, limit decimal places
+                        return value.toFixed(1);
+                      }}
+                    />
+                    <Tooltip 
+                      contentStyle={{ backgroundColor: 'white', borderRadius: '4px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }}
+                      // Throttle tooltip updates for better performance with large datasets
+                      isAnimationActive={data ? data.length <= 500 : true}
+                      cursor={{ strokeDasharray: '3 3', stroke: 'rgba(50,50,50,0.4)' }}
+                      // Custom content renderer for better performance
+                      content={({ active, payload }) => {
+                        if (!active || !payload || !payload.length) {
+                          return null;
+                        }
+                        
+                        // Simple lightweight tooltip for large datasets
+                        const point = payload[0].payload;
+                        return (
+                          <div className="custom-tooltip" style={{
+                            backgroundColor: 'white',
+                            padding: '8px 12px',
+                            border: '1px solid #ccc',
+                            borderRadius: '4px',
+                            boxShadow: '0 2px 5px rgba(0,0,0,0.1)'
+                          }}>
+                            <p className="tooltip-x"><strong>X:</strong> {point.x}</p>
+                            <p className="tooltip-y"><strong>Y:</strong> {point.y}</p>
+                          </div>
+                        );
+                      }}
+                    />
+                    <Scatter 
+                      name="Data Points"
+                      data={processedData.length > 0 ? processedData : [{ x: 0, y: 0 }]}
+                      fill={color}
+                      stroke={color}
+                      strokeWidth={2}
+                      fillOpacity={0.8}
+                      strokeOpacity={0.9}
+                      shape={(props: any) => {
+                        // Protect against null or undefined props
+                        if (!props || props.cx === undefined || props.cy === undefined) {
+                          // Return invisible circle instead of null to satisfy type requirements
+                          return (
+                            <circle 
+                              cx={0} 
+                              cy={0} 
+                              r={0} 
+                              fill="none" 
+                              opacity={0}
+                            />
+                          );
+                        }
+                        
+                        // Custom shape for optimal performance
+                        const { cx, cy } = props;
+                        
+                        // Validate that cx and cy are valid numbers
+                        if (typeof cx !== 'number' || typeof cy !== 'number' || isNaN(cx) || isNaN(cy) || !isFinite(cx) || !isFinite(cy)) {
+                          // Return invisible circle instead of null
+                          return (
+                            <circle 
+                              cx={0} 
+                              cy={0} 
+                              r={0} 
+                              fill="none" 
+                              opacity={0}
+                            />
+                          );
+                        }
+                        
+                        return (
+                          <circle 
+                            cx={cx} 
+                            cy={cy} 
+                            r={renderStrategy.pointSize} 
+                            fill={color}
+                            fillOpacity={0.8}
+                            stroke={color}
+                            strokeWidth={1.5}
+                            strokeOpacity={0.9}
+                          />
+                        );
+                      }}
+                    />
+                    {/* Filter for glow effect */}
+                    <defs>
+                      <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+                        <feGaussianBlur stdDeviation="2" result="blur" />
+                        <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                      </filter>
+                    </defs>
+                    {quadrantMode === 'all' && (
+                      <>
+                        <ReferenceLine x={0} stroke="rgba(0,0,0,0.5)" strokeWidth={1} ifOverflow="extendDomain" />
+                        <ReferenceLine y={0} stroke="rgba(0,0,0,0.5)" strokeWidth={1} ifOverflow="extendDomain" />
+                      </>
+                    )}
+                  </ScatterChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex flex-1 items-center justify-center text-gray-500">
+                  <p>No valid data points to display</p>
+                </div>
+              )}
             </div>
           )}
         </div>

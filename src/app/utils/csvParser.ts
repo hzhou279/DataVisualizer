@@ -21,133 +21,137 @@ export function validateCSVFormat(data: any[]): boolean {
 }
 
 export function parseCSVData(data: any[]): ParsedData[] {
-  const headers = Object.keys(data[0]);
-  
-  // Use the first two columns as x and y
-  const xHeader = headers[0];
-  const yHeader = headers[1];
-  
-  // Check if data has negative values to determine quadrant mode
-  let hasNegativeX = false;
-  let hasNegativeY = false;
-  
-  const result = data.map(row => {
-    const x = parseFloat(row[xHeader]);
-    const y = parseFloat(row[yHeader]);
-    
-    // Check for negative values
-    if (x < 0) hasNegativeX = true;
-    if (y < 0) hasNegativeY = true;
-    
-    // Create data point with all columns
-    const point: ParsedData = { x, y };
-    
-    // Add all other columns as additional properties
-    headers.forEach(header => {
-      if (header !== xHeader && header !== yHeader) {
-        point[header] = row[header];
-      }
-    });
-    
-    return point;
-  }).filter(point => !isNaN(point.x) && !isNaN(point.y));
-  
-  // Helper function to round domain values nicely
-  const roundDomainValue = (value: number, isMin: boolean): number => {
-    // Handle zero specially
-    if (value === 0) return 0;
-    
-    const absValue = Math.abs(value);
-    
-    // For values close to nice numbers, don't over-expand the range
-    // Calculate a more reasonable magnitude based on the range
-    const adjustedMagnitude = Math.pow(10, Math.floor(Math.log10(absValue)));
-    
-    // If the value is already close to a nice number, use a smaller magnitude
-    const normalizedValue = absValue / adjustedMagnitude;
-    
-    let niceValue;
-    
-    if (isMin) {
-      // For minimum values, round down but don't go too far
-      if (normalizedValue < 1.5) {
-        // For values < 1.5, round down to nearest integer
-        niceValue = Math.floor(normalizedValue) * adjustedMagnitude;
-      } else if (normalizedValue < 3) {
-        // For values < 3, use the lower multiple of 0.5
-        niceValue = Math.floor(normalizedValue * 2) / 2 * adjustedMagnitude;
-      } else if (normalizedValue < 7) {
-        // For values < 7, use the lower multiple of 1
-        niceValue = Math.floor(normalizedValue) * adjustedMagnitude;
-      } else {
-        // For values >= 7, use the next lower multiple of 5
-        niceValue = Math.floor(normalizedValue / 5) * 5 * adjustedMagnitude;
-      }
-      
-      // Apply sign
-      niceValue = niceValue * (value < 0 ? -1 : 1);
-    } else {
-      // For maximum values, round up but don't go too far
-      if (normalizedValue <= 1.2) {
-        // For values ≤ 1.2, use the next higher multiple of 0.2
-        niceValue = Math.ceil(normalizedValue * 5) / 5 * adjustedMagnitude;
-      } else if (normalizedValue <= 2) {
-        // For values ≤ 2, use the next higher multiple of 0.5
-        niceValue = Math.ceil(normalizedValue * 2) / 2 * adjustedMagnitude;
-      } else if (normalizedValue <= 5) {
-        // For values ≤ 5, use the next integer
-        niceValue = Math.ceil(normalizedValue) * adjustedMagnitude;
-      } else if (normalizedValue <= 10) {
-        // For values ≤ 10, round to next multiple of 2
-        niceValue = Math.ceil(normalizedValue / 2) * 2 * adjustedMagnitude;
-      } else {
-        // For values > 10, round to next multiple of 5
-        niceValue = Math.ceil(normalizedValue / 5) * 5 * adjustedMagnitude;
-      }
-      
-      // Apply sign
-      niceValue = niceValue * (value < 0 ? -1 : 1);
+  try {
+    // Check if data is valid
+    if (!data || !Array.isArray(data) || data.length === 0 || !data[0]) {
+      console.warn("Invalid data passed to parseCSVData");
+      return [];
     }
     
-    return niceValue;
-  };
-  
-  // Get min/max values
-  const xMin = Math.min(...result.map(point => point.x));
-  const xMax = Math.max(...result.map(point => point.x));
-  const yMin = Math.min(...result.map(point => point.y));
-  const yMax = Math.max(...result.map(point => point.y));
-  
-  // Calculate if we need to use four quadrants
-  const shouldUseFourQuadrants = xMin < 0 || yMin < 0;
-  
-  // Calculate domain values without rounding
-  let domains;
-  if (shouldUseFourQuadrants) {
-    // For four quadrants, use exact values
-    domains = {
-      xMin: xMin,
-      xMax: xMax,
-      yMin: yMin,
-      yMax: yMax
-    };
-  } else {
-    // For first quadrant only
-    domains = {
-      xMin: 0,
-      xMax: xMax,
-      yMin: 0,
-      yMax: yMax
-    };
+    const headers = Object.keys(data[0]);
+    
+    // Validate headers exist
+    if (!headers || headers.length < 2) {
+      console.warn("CSV data has insufficient columns");
+      return [];
+    }
+    
+    // Use the first two columns as x and y
+    const xHeader = headers[0];
+    const yHeader = headers[1];
+    
+    // Check if data has negative values to determine quadrant mode
+    let hasNegativeX = false;
+    let hasNegativeY = false;
+    
+    const result = data
+      .filter(row => row !== null && row !== undefined) // Filter out null/undefined rows
+      .map(row => {
+        try {
+          const x = parseFloat(row[xHeader]);
+          const y = parseFloat(row[yHeader]);
+          
+          // Check for negative values
+          if (x < 0) hasNegativeX = true;
+          if (y < 0) hasNegativeY = true;
+          
+          // Create data point with all columns
+          const point: ParsedData = { x, y };
+          
+          // Add all other columns as additional properties
+          headers.forEach(header => {
+            if (header !== xHeader && header !== yHeader) {
+              point[header] = row[header];
+            }
+          });
+          
+          return point;
+        } catch (err) {
+          console.warn("Error parsing row in CSV data:", err);
+          // Return a point with NaN values that will be filtered out
+          return { x: NaN, y: NaN };
+        }
+      })
+      .filter(point => 
+        // Filter out invalid points
+        !isNaN(point.x) && 
+        !isNaN(point.y) && 
+        isFinite(point.x) && 
+        isFinite(point.y)
+      );
+    
+    // If no valid points were found, return empty array
+    if (result.length === 0) {
+      console.warn("No valid data points found in CSV");
+      return [];
+    }
+    
+    // Get min/max values safely
+    const xValues = result.map(point => point.x);
+    const yValues = result.map(point => point.y);
+    
+    const xMin = Math.min(...xValues);
+    const xMax = Math.max(...xValues);
+    const yMin = Math.min(...yValues);
+    const yMax = Math.max(...yValues);
+    
+    // Check for invalid min/max values
+    if (!isFinite(xMin) || !isFinite(xMax) || !isFinite(yMin) || !isFinite(yMax)) {
+      console.warn("Invalid min/max values calculated from data");
+      // Return data without domain information
+      return result;
+    }
+    
+    // Calculate if we need to use four quadrants
+    const shouldUseFourQuadrants = xMin < 0 || yMin < 0;
+    
+    // Calculate domain values with the specified requirements
+    let domains;
+    if (shouldUseFourQuadrants) {
+      // For negative values: ensure max_x - min_x = max_y - min_y = 5000
+      // Calculate centers of the current data range
+      const xCenter = (xMax + xMin) / 2;
+      const yCenter = (yMax + yMin) / 2;
+      
+      // Set the half-width to ensure range is 5000
+      const halfWidth = 2500;
+      
+      // Create domains and ensure max values are always greater than min values
+      domains = {
+        xMin: xCenter - halfWidth,
+        xMax: Math.max(xCenter + halfWidth, xCenter - halfWidth + 1), // Ensure xMax > xMin
+        yMin: yCenter - halfWidth,
+        yMax: Math.max(yCenter + halfWidth, yCenter - halfWidth + 1)  // Ensure yMax > yMin
+      };
+      
+      // Add a small buffer if the range is too small
+      if (domains.xMax - domains.xMin < 10) {
+        domains.xMax = domains.xMin + 10;
+      }
+      if (domains.yMax - domains.yMin < 10) {
+        domains.yMax = domains.yMin + 10;
+      }
+    } else {
+      // For non-negative values: range should be [0, 5000]
+      domains = {
+        xMin: 0,
+        xMax: 5000,
+        yMin: 0, 
+        yMax: 5000
+      };
+    }
+    
+    // Add metadata to the first data point (for processing in page.tsx)
+    if (result.length > 0) {
+      result[0].quadrantMode = shouldUseFourQuadrants ? 'all' : 'first';
+      result[0].domains = domains;
+    }
+    
+    return result;
+  } catch (error) {
+    console.error("Error in parseCSVData:", error);
+    return [];
   }
-  
-  // Add metadata to the first data point (for processing in page.tsx)
-  if (result.length > 0) {
-    result[0].quadrantMode = shouldUseFourQuadrants ? 'all' : 'first';
-    result[0].domains = domains;
-  }
-  
-  return result;
 }
 
 export function parseCSVFile(file: File): Promise<any[]> {

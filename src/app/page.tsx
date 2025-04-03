@@ -69,57 +69,80 @@ export default function Home() {
   ];
 
   const handleFileProcessed = (parsedData: ParsedData[], fileName: string) => {
-    if (parsedData.length === 0) {
-      alert('No valid data points found in the file.');
-      return;
-    }
+    try {
+      if (!parsedData || !Array.isArray(parsedData) || parsedData.length === 0) {
+        alert('No valid data points found in the file.');
+        return;
+      }
 
-    // Extract the metadata from the first point (added by parseCSVData)
-    const firstPoint = parsedData[0];
-    const quadrantMode = firstPoint.quadrantMode || 'first';
-    const domains = firstPoint.domains || {
-      xMin: 0,
-      xMax: 100,
-      yMin: 0,
-      yMax: 100
-    };
-    
-    // Increment the z-index counter for each new graph
-    setZIndexCounter(prev => prev + 1);
-    
-    // Use fixed reasonable sizes
-    const initialWidth = 600;
-    const initialHeight = 600;
-    
-    // Get current color and increment color index
-    const currentColor = graphColors[colorIndex];
-    setColorIndex((colorIndex + 1) % graphColors.length);
-    
-    // Create a new Graph object
-    const newGraph: Graph = {
-      id: Date.now().toString(),
-      title: fileName || 'Graph',
-      data: parsedData,
-      position: getNextGraphPosition(graphs),
-      size: { width: initialWidth, height: initialHeight },
-      rotation: 0,
-      color: currentColor,
-      axisIntervals: { x: 5, y: 5 },
-      quadrantMode: quadrantMode as QuadrantMode,
-      domains,
-      zIndex: zIndexCounter,
-      minimized: false,
-      settings: {
-        showGrid: true,
-        dotSize: 5,
-        showLabels: true,
-        snapToGrid: true
-      },
-      globalCoordinate: { x: 0, y: 0 },
-      rotationCenter: { x: 0, y: 0 }
-    };
-    
-    setGraphs(prevGraphs => [...prevGraphs, newGraph]);
+      // Check for valid data
+      const validData = parsedData.filter(point => 
+        point && 
+        typeof point.x === 'number' && 
+        typeof point.y === 'number' && 
+        !isNaN(point.x) && 
+        !isNaN(point.y) && 
+        isFinite(point.x) && 
+        isFinite(point.y)
+      );
+      
+      if (validData.length === 0) {
+        alert('No valid data points found in the file.');
+        return;
+      }
+
+      // Extract the metadata from the first point (added by parseCSVData)
+      const firstPoint = validData[0];
+      const quadrantMode = firstPoint.quadrantMode || 'first';
+      
+      // Get domains from the parser - these already follow our requirements
+      const domains = firstPoint.domains || {
+        xMin: 0,
+        xMax: 5000,
+        yMin: 0,
+        yMax: 5000
+      };
+      
+      // Increment the z-index counter for each new graph
+      setZIndexCounter(prev => prev + 1);
+      
+      // Use fixed reasonable sizes
+      const initialWidth = 600;
+      const initialHeight = 600;
+      
+      // Get current color and increment color index
+      const currentColor = graphColors[colorIndex];
+      setColorIndex((colorIndex + 1) % graphColors.length);
+      
+      // Create a new Graph object
+      const newGraph: Graph = {
+        id: Date.now().toString(),
+        title: fileName || 'Graph',
+        data: validData,
+        position: getNextGraphPosition(graphs),
+        size: { width: initialWidth, height: initialHeight },
+        rotation: 0,
+        color: currentColor,
+        axisIntervals: { x: 5, y: 5 },
+        quadrantMode: quadrantMode as QuadrantMode,
+        domains,
+        zIndex: zIndexCounter,
+        minimized: false,
+        settings: {
+          showGrid: true,
+          dotSize: 5,
+          showLabels: true,
+          snapToGrid: true
+        },
+        globalCoordinate: { x: 0, y: 0 },
+        rotationCenter: { x: 0, y: 0 }
+      };
+      
+      setGraphs(prevGraphs => [...prevGraphs, newGraph]);
+    } catch (error) {
+      console.error("Error processing file data:", error);
+      alert('An error occurred while processing the file. Please try again with a different file.');
+    }
   };
 
   const handlePositionUpdate = (graphId: string, x: number, y: number) => {
