@@ -108,29 +108,13 @@ export function parseCSVData(data: any[]): ParsedData[] {
     // Calculate domain values with the specified requirements
     let domains;
     if (shouldUseFourQuadrants) {
-      // For negative values: ensure max_x - min_x = max_y - min_y = 5000
-      // Calculate centers of the current data range
-      const xCenter = (xMax + xMin) / 2;
-      const yCenter = (yMax + yMin) / 2;
-      
-      // Set the half-width to ensure range is 5000
-      const halfWidth = 2500;
-      
-      // Create domains and ensure max values are always greater than min values
+      // For negative values: use fixed range [-2500, 2500] for both axes
       domains = {
-        xMin: xCenter - halfWidth,
-        xMax: Math.max(xCenter + halfWidth, xCenter - halfWidth + 1), // Ensure xMax > xMin
-        yMin: yCenter - halfWidth,
-        yMax: Math.max(yCenter + halfWidth, yCenter - halfWidth + 1)  // Ensure yMax > yMin
+        xMin: -2500,
+        xMax: 2500,
+        yMin: -2500,
+        yMax: 2500
       };
-      
-      // Add a small buffer if the range is too small
-      if (domains.xMax - domains.xMin < 10) {
-        domains.xMax = domains.xMin + 10;
-      }
-      if (domains.yMax - domains.yMin < 10) {
-        domains.yMax = domains.yMin + 10;
-      }
     } else {
       // For non-negative values: range should be [0, 5000]
       domains = {

@@ -255,13 +255,13 @@ export default function DraggableGraph({
 
   // Optimize rendering based on dataset size
   const renderStrategy = useMemo(() => {
-    if (!data) return { useSimplePoints: false, pointSize: 6 };
+    if (!data) return { useSimplePoints: false, pointSize: 5 };
     
     // Use settings.dotSize if available, otherwise default to dynamic sizing based on data length
     const pointSize = settings?.dotSize ?? (
-      data.length > 5000 ? 2 : 
-      data.length > 1000 ? 3 : 
-      data.length > 500 ? 4 : 6
+      data.length > 5000 ? 1 : 
+      data.length > 1000 ? 2 : 
+      data.length > 500 ? 3 : 5
     );
     
     return {
@@ -327,28 +327,13 @@ export default function DraggableGraph({
       let domainValues;
       
       if (hasNegativeValues) {
-        // For data with negative values, ensure max_x - min_x = max_y - min_y = 5000
-        // Calculate centers of the current data range
-        const xCenter = (dataMax.x + dataMin.x) / 2;
-        const yCenter = (dataMax.y + dataMin.y) / 2;
-        
-        // Set the half-width to ensure range is 5000
-        const halfWidth = 2500;
-        
+        // For data with negative values, use fixed range [-2500, 2500] for both axes
         domainValues = {
-          xMin: xCenter - halfWidth,
-          xMax: Math.max(xCenter + halfWidth, xCenter - halfWidth + 1), // Ensure xMax > xMin
-          yMin: yCenter - halfWidth,
-          yMax: Math.max(yCenter + halfWidth, yCenter - halfWidth + 1)  // Ensure yMax > yMin
+          xMin: -2500,
+          xMax: 2500,
+          yMin: -2500,
+          yMax: 2500
         };
-        
-        // Add a small buffer if ranges are too small
-        if (domainValues.xMax - domainValues.xMin < 10) {
-          domainValues.xMax = domainValues.xMin + 10;
-        }
-        if (domainValues.yMax - domainValues.yMin < 10) {
-          domainValues.yMax = domainValues.yMin + 10;
-        }
       } else {
         // For non-negative values, range should be [0, 5000]
         domainValues = {
@@ -915,28 +900,13 @@ export default function DraggableGraph({
             let domainValues;
             
             if (hasNegativeValues) {
-              // For data with negative values, ensure max_x - min_x = max_y - min_y = 5000
-              // Calculate centers of the current data range
-              const xCenter = (dataMax.x + dataMin.x) / 2;
-              const yCenter = (dataMax.y + dataMin.y) / 2;
-              
-              // Set the half-width to ensure range is 5000
-              const halfWidth = 2500;
-              
+              // For data with negative values, use fixed range [-2500, 2500] for both axes
               domainValues = {
-                xMin: xCenter - halfWidth,
-                xMax: Math.max(xCenter + halfWidth, xCenter - halfWidth + 1), // Ensure xMax > xMin
-                yMin: yCenter - halfWidth,
-                yMax: Math.max(yCenter + halfWidth, yCenter - halfWidth + 1)  // Ensure yMax > yMin
+                xMin: -2500,
+                xMax: 2500,
+                yMin: -2500,
+                yMax: 2500
               };
-              
-              // Add a small buffer if ranges are too small
-              if (domainValues.xMax - domainValues.xMin < 10) {
-                domainValues.xMax = domainValues.xMin + 10;
-              }
-              if (domainValues.yMax - domainValues.yMin < 10) {
-                domainValues.yMax = domainValues.yMin + 10;
-              }
             } else {
               // For non-negative values, range should be [0, 5000]
               domainValues = {

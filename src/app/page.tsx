@@ -130,7 +130,7 @@ export default function Home() {
         minimized: false,
         settings: {
           showGrid: true,
-          dotSize: 5,
+          dotSize: 3,
           showLabels: true,
           snapToGrid: true
         },
@@ -222,7 +222,6 @@ export default function Home() {
     setGraphs((prevGraphs) => prevGraphs.filter(graph => graph.id !== graphId));
   };
 
-  // 添加全局更新处理函数
   const handleGraphUpdate = (graphId: string, updatedProps: Partial<Graph>) => {
     setGraphs(prevGraphs => 
       prevGraphs.map(graph => {
