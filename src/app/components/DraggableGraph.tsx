@@ -67,24 +67,67 @@ const doRectanglesOverlap = (
 const transformPoints = (
   points: any[],
   fromDomains: { xMin: number; xMax: number; yMin: number; yMax: number },
-  toDomains: { xMin: number; xMax: number; yMin: number; yMax: number }
+  toDomains: { xMin: number; xMax: number; yMin: number; yMax: number },
+  sourceGraph: { position: { x: number; y: number }, size: { width: number; height: number }, color: string },
+  targetGraph: { position: { x: number; y: number }, size: { width: number; height: number } }
 ): any[] => {
   return points.map(point => {
-    // Calculate the relative position (0-1) within the source domains
-    const xRatio = (point.x - fromDomains.xMin) / (fromDomains.xMax - fromDomains.xMin);
-    const yRatio = (point.y - fromDomains.yMin) / (fromDomains.yMax - fromDomains.yMin);
+    // First calculate the pixel position within the source graph
+    const sourceWidth = sourceGraph.size.width;
+    const sourceHeight = sourceGraph.size.height;
+    const sourceXRange = fromDomains.xMax - fromDomains.xMin;
+    const sourceYRange = fromDomains.yMax - fromDomains.yMin;
     
-    // Map the relative position to the target domains
-    const newX = toDomains.xMin + xRatio * (toDomains.xMax - toDomains.xMin);
-    const newY = toDomains.yMin + yRatio * (toDomains.yMax - toDomains.yMin);
+    // Calculate the pixel coordinates relative to the source graph's content area
+    // Subtracting padding/margins (assuming chart has 20px padding on all sides)
+    const chartPadding = 20;
+    const sourceInnerWidth = sourceWidth - (chartPadding * 2);
+    const sourceInnerHeight = sourceHeight - (chartPadding * 2);
+    
+    // Calculate the relative position within the source graph's content area (0-1)
+    const relativeX = (point.x - fromDomains.xMin) / sourceXRange;
+    const relativeY = 1 - ((point.y - fromDomains.yMin) / sourceYRange); // Invert Y because screen coords go down
+    
+    // Convert to pixel position within source graph content area
+    const sourcePixelX = chartPadding + (relativeX * sourceInnerWidth);
+    const sourcePixelY = chartPadding + (relativeY * sourceInnerHeight);
+    
+    // Calculate absolute pixel position on the screen
+    const absolutePixelX = sourceGraph.position.x + sourcePixelX;
+    const absolutePixelY = sourceGraph.position.y + sourcePixelY;
+    
+    // Calculate relative position within target graph
+    // First get position within target graph's coordinate system
+    const targetRelativeX = absolutePixelX - targetGraph.position.x;
+    const targetRelativeY = absolutePixelY - targetGraph.position.y;
+    
+    // Target graph dimensions
+    const targetWidth = targetGraph.size.width;
+    const targetHeight = targetGraph.size.height;
+    const targetInnerWidth = targetWidth - (chartPadding * 2);
+    const targetInnerHeight = targetHeight - (chartPadding * 2);
+    
+    // Convert to 0-1 scale within target graph's content area
+    const targetRelativeXNormalized = (targetRelativeX - chartPadding) / targetInnerWidth;
+    const targetRelativeYNormalized = (targetRelativeY - chartPadding) / targetInnerHeight;
+    
+    // Target graph domain ranges
+    const targetXRange = toDomains.xMax - toDomains.xMin;
+    const targetYRange = toDomains.yMax - toDomains.yMin;
+    
+    // Calculate the final values in target graph's coordinate system
+    const newX = toDomains.xMin + (targetRelativeXNormalized * targetXRange);
+    const newY = toDomains.yMax - (targetRelativeYNormalized * targetYRange); // Invert Y back
     
     // Create a new point with transformed coordinates
     return {
       ...point,
       x: newX,
       y: newY,
-      _originalX: point.x, // Store original values for reference
-      _originalY: point.y
+      _originalX: point.x,
+      _originalY: point.y,
+      _originalColor: sourceGraph.color, // Store the original color
+      color: sourceGraph.color // Preserve the original color
     };
   });
 };
@@ -1034,6 +1077,10 @@ export default function DraggableGraph({
     const targetGraph = allGraphs.find(graph => graph.id === toGraphId);
     if (!targetGraph || !onDumpPoints) return;
     
+    // Find the current graph (source)
+    const sourceGraph = allGraphs.find(graph => graph.id === id);
+    if (!sourceGraph) return;
+    
     // Ensure valid domains for both graphs
     const sourceDomains = {
       xMin: scaledDomains.xMin ?? 0,
@@ -1049,12 +1096,48 @@ export default function DraggableGraph({
       yMax: targetGraph.domains?.yMax ?? 5000
     };
     
-    // Transform points
-    const transformedPoints = transformPoints(processedData, sourceDomains, targetDomains);
+    // Transform points with the graph positioning information
+    const transformedPoints = transformPoints(
+      processedData,
+      sourceDomains,
+      targetDomains,
+      {
+        position: sourceGraph.position,
+        size: sourceGraph.size,
+        color: sourceGraph.color
+      },
+      {
+        position: targetGraph.position,
+        size: targetGraph.size
+      }
+    );
     
     // Call the handler with transformed points
     onDumpPoints(id, toGraphId, transformedPoints);
   };
+
+  // Filter the processedData to separate dumped and original points
+  const originalPoints = useMemo(() => {
+    return processedData.filter(point => !point._isDumped);
+  }, [processedData]);
+
+  // Group dumped points by their source color
+  const dumpedPointsByColor = useMemo(() => {
+    const dumped = processedData.filter(point => point._isDumped);
+    
+    // Group points by color
+    const groupedByColor: Record<string, any[]> = {};
+    
+    dumped.forEach(point => {
+      const color = point._originalColor || point.color || '#888888';
+      if (!groupedByColor[color]) {
+        groupedByColor[color] = [];
+      }
+      groupedByColor[color].push(point);
+    });
+    
+    return groupedByColor;
+  }, [processedData]);
 
   // Return the component with error boundary
   return (
@@ -1283,7 +1366,7 @@ export default function DraggableGraph({
                 >
                   <ScatterChart 
                     margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
-                    style={{ background: "transparent" }} // Make chart background transparent
+                    style={{ background: "transparent" }}
                   >
                     {/* Simplified CartesianGrid approach to eliminate rendering issues */}
                     <CartesianGrid 
@@ -1429,7 +1512,7 @@ export default function DraggableGraph({
                     />
                     <Scatter 
                       name="Data Points"
-                      data={processedData.length > 0 ? processedData : [{ x: 0, y: 0 }]}
+                      data={originalPoints.length > 0 ? originalPoints : [{ x: 0, y: 0 }]}
                       fill={color}
                       stroke={color}
                       strokeWidth={2}
@@ -1481,6 +1564,62 @@ export default function DraggableGraph({
                         );
                       }}
                     />
+                    
+                    {/* Render dumped points by color groups */}
+                    {Object.entries(dumpedPointsByColor).map(([pointColor, points], index) => (
+                      <Scatter
+                        key={`dumped-${pointColor}-${index}`}
+                        name={`Dumped Points (${pointColor})`}
+                        data={points}
+                        fill={pointColor}
+                        stroke={pointColor}
+                        strokeWidth={2}
+                        fillOpacity={0.8}
+                        strokeOpacity={0.9}
+                        shape={(props: any): React.ReactElement => {
+                          // Always return a React element (never undefined)
+                          if (!props || props.cx === undefined || props.cy === undefined) {
+                            return (
+                              <circle 
+                                cx={0} 
+                                cy={0} 
+                                r={0} 
+                                fill="none" 
+                                opacity={0}
+                              />
+                            );
+                          }
+                          
+                          const { cx, cy } = props;
+                          
+                          if (typeof cx !== 'number' || typeof cy !== 'number' || isNaN(cx) || isNaN(cy) || !isFinite(cx) || !isFinite(cy)) {
+                            return (
+                              <circle 
+                                cx={0} 
+                                cy={0} 
+                                r={0} 
+                                fill="none" 
+                                opacity={0}
+                              />
+                            );
+                          }
+                          
+                          return (
+                            <circle 
+                              cx={cx} 
+                              cy={cy} 
+                              r={renderStrategy.pointSize} 
+                              fill={pointColor}
+                              fillOpacity={0.8}
+                              stroke={pointColor}
+                              strokeWidth={1.5}
+                              strokeOpacity={0.9}
+                            />
+                          );
+                        }}
+                      />
+                    ))}
+                    
                     {/* Filter for glow effect */}
                     <defs>
                       <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">

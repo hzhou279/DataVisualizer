@@ -311,8 +311,14 @@ export default function DataPanel({ graph, onDataUpdate, onClose }: DataPanelPro
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap text-xs">
                     {isDumped ? (
-                      <span className="text-purple-600 text-xs">
-                        {point._source || 'Dumped'}
+                      <span className="text-xs flex items-center">
+                        <span 
+                          className="inline-block w-3 h-3 rounded-full mr-1.5" 
+                          style={{ backgroundColor: point._originalColor || point.color || 'purple' }}
+                        ></span>
+                        <span className="text-purple-600">
+                          {point._source || 'Dumped'}
+                        </span>
                       </span>
                     ) : (
                       <span className="text-green-600 text-xs">Original</span>

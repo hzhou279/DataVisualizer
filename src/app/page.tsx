@@ -386,18 +386,22 @@ export default function Home() {
       setGraphs(prevGraphs => 
         prevGraphs.map(graph => {
           if (graph.id === toGraphId) {
-            // Add a property to identify these points as dumped points
-            const pointsWithSource = transformedPoints.map(point => ({
+            // Add metadata to the points to track their source and preserve their original color
+            const pointsWithMetadata = transformedPoints.map(point => ({
               ...point,
               _source: sourceGraph.title,
               _sourceId: fromGraphId,
-              _dumpedAt: new Date().toISOString()
+              _dumpedAt: new Date().toISOString(),
+              // Preserve the color from the original point
+              _originalColor: point._originalColor || sourceGraph.color,
+              // Use a custom renderer key so that we can identify these points in the chart
+              _isDumped: true
             }));
             
             // Combine existing points with new points
             return {
               ...graph,
-              data: [...graph.data, ...pointsWithSource]
+              data: [...graph.data, ...pointsWithMetadata]
             };
           }
           return graph;
