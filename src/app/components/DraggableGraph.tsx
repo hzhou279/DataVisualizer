@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import React from 'react';
 import { useGridSystem } from './GlobalCoordinateGrid';
 import ErrorBoundary from './ErrorBoundary';
+import { createPortal } from 'react-dom';
 
 interface DraggableGraphProps {
   data: any[];
@@ -68,56 +69,97 @@ const transformPoints = (
   points: any[],
   fromDomains: { xMin: number; xMax: number; yMin: number; yMax: number },
   toDomains: { xMin: number; xMax: number; yMin: number; yMax: number },
-  sourceGraph: { position: { x: number; y: number }, size: { width: number; height: number }, color: string },
-  targetGraph: { position: { x: number; y: number }, size: { width: number; height: number } }
+  sourceGraph: { position: { x: number; y: number }, size: { width: number; height: number }, color: string, rotation: number },
+  targetGraph: { position: { x: number; y: number }, size: { width: number; height: number }, rotation: number }
 ): any[] => {
+  // Define chart padding (assuming 20px on all sides)
+  const chartPadding = 20;
+  
+  // Source graph dimensions
+  const sourceWidth = sourceGraph.size.width;
+  const sourceHeight = sourceGraph.size.height;
+  const sourceInnerWidth = sourceWidth - (chartPadding * 2);
+  const sourceInnerHeight = sourceHeight - (chartPadding * 2);
+  
+  // Target graph dimensions
+  const targetWidth = targetGraph.size.width;
+  const targetHeight = targetGraph.size.height;
+  const targetInnerWidth = targetWidth - (chartPadding * 2);
+  const targetInnerHeight = targetHeight - (chartPadding * 2);
+  
+  // Calculate the center points of each graph (for rotation)
+  const sourceCenterX = sourceGraph.position.x + sourceWidth / 2;
+  const sourceCenterY = sourceGraph.position.y + sourceHeight / 2;
+  const targetCenterX = targetGraph.position.x + targetWidth / 2;
+  const targetCenterY = targetGraph.position.y + targetHeight / 2;
+  
+  // Convert rotation from degrees to radians
+  const sourceRotationRad = (sourceGraph.rotation || 0) * Math.PI / 180;
+  const targetRotationRad = (targetGraph.rotation || 0) * Math.PI / 180;
+  
   return points.map(point => {
-    // First calculate the pixel position within the source graph
-    const sourceWidth = sourceGraph.size.width;
-    const sourceHeight = sourceGraph.size.height;
-    const sourceXRange = fromDomains.xMax - fromDomains.xMin;
-    const sourceYRange = fromDomains.yMax - fromDomains.yMin;
+    // STEP 1: Calculate the relative position (0-1) within the source graph's domain
+    const relativeX = (point.x - fromDomains.xMin) / (fromDomains.xMax - fromDomains.xMin);
+    const relativeY = 1 - ((point.y - fromDomains.yMin) / (fromDomains.yMax - fromDomains.yMin)); // Invert Y for screen coords
     
-    // Calculate the pixel coordinates relative to the source graph's content area
-    // Subtracting padding/margins (assuming chart has 20px padding on all sides)
-    const chartPadding = 20;
-    const sourceInnerWidth = sourceWidth - (chartPadding * 2);
-    const sourceInnerHeight = sourceHeight - (chartPadding * 2);
+    // STEP 2: Convert to pixel position within source graph content area (relative to graph's top-left)
+    const sourceLocalX = chartPadding + (relativeX * sourceInnerWidth);
+    const sourceLocalY = chartPadding + (relativeY * sourceInnerHeight);
     
-    // Calculate the relative position within the source graph's content area (0-1)
-    const relativeX = (point.x - fromDomains.xMin) / sourceXRange;
-    const relativeY = 1 - ((point.y - fromDomains.yMin) / sourceYRange); // Invert Y because screen coords go down
+    // STEP 3: Apply source graph's rotation (if any)
+    // First translate to origin (center of graph)
+    const sourceOffsetX = sourceLocalX - sourceWidth / 2;
+    const sourceOffsetY = sourceLocalY - sourceHeight / 2;
     
-    // Convert to pixel position within source graph content area
-    const sourcePixelX = chartPadding + (relativeX * sourceInnerWidth);
-    const sourcePixelY = chartPadding + (relativeY * sourceInnerHeight);
+    // Apply rotation around center
+    let rotatedSourceX, rotatedSourceY;
+    if (sourceRotationRad !== 0) {
+      rotatedSourceX = Math.cos(sourceRotationRad) * sourceOffsetX - Math.sin(sourceRotationRad) * sourceOffsetY;
+      rotatedSourceY = Math.sin(sourceRotationRad) * sourceOffsetX + Math.cos(sourceRotationRad) * sourceOffsetY;
+    } else {
+      rotatedSourceX = sourceOffsetX;
+      rotatedSourceY = sourceOffsetY;
+    }
     
-    // Calculate absolute pixel position on the screen
-    const absolutePixelX = sourceGraph.position.x + sourcePixelX;
-    const absolutePixelY = sourceGraph.position.y + sourcePixelY;
+    // Translate back to get position within the graph
+    const finalSourceLocalX = rotatedSourceX + sourceWidth / 2;
+    const finalSourceLocalY = rotatedSourceY + sourceHeight / 2;
     
-    // Calculate relative position within target graph
-    // First get position within target graph's coordinate system
-    const targetRelativeX = absolutePixelX - targetGraph.position.x;
-    const targetRelativeY = absolutePixelY - targetGraph.position.y;
+    // STEP 4: Calculate the absolute screen position of the point
+    const absoluteX = sourceGraph.position.x + finalSourceLocalX;
+    const absoluteY = sourceGraph.position.y + finalSourceLocalY;
     
-    // Target graph dimensions
-    const targetWidth = targetGraph.size.width;
-    const targetHeight = targetGraph.size.height;
-    const targetInnerWidth = targetWidth - (chartPadding * 2);
-    const targetInnerHeight = targetHeight - (chartPadding * 2);
+    // STEP 5: Calculate position relative to target graph's position
+    const targetRelativeX = absoluteX - targetGraph.position.x;
+    const targetRelativeY = absoluteY - targetGraph.position.y;
     
-    // Convert to 0-1 scale within target graph's content area
-    const targetRelativeXNormalized = (targetRelativeX - chartPadding) / targetInnerWidth;
-    const targetRelativeYNormalized = (targetRelativeY - chartPadding) / targetInnerHeight;
+    // STEP 6: Reverse the target graph's rotation to get the local position
+    // First translate to origin (center of graph)
+    const targetOffsetX = targetRelativeX - targetWidth / 2;
+    const targetOffsetY = targetRelativeY - targetHeight / 2;
     
-    // Target graph domain ranges
-    const targetXRange = toDomains.xMax - toDomains.xMin;
-    const targetYRange = toDomains.yMax - toDomains.yMin;
+    // Apply inverse rotation
+    let unrotatedTargetX, unrotatedTargetY;
+    if (targetRotationRad !== 0) {
+      unrotatedTargetX = Math.cos(-targetRotationRad) * targetOffsetX - Math.sin(-targetRotationRad) * targetOffsetY;
+      unrotatedTargetY = Math.sin(-targetRotationRad) * targetOffsetX + Math.cos(-targetRotationRad) * targetOffsetY;
+    } else {
+      unrotatedTargetX = targetOffsetX;
+      unrotatedTargetY = targetOffsetY;
+    }
     
-    // Calculate the final values in target graph's coordinate system
-    const newX = toDomains.xMin + (targetRelativeXNormalized * targetXRange);
-    const newY = toDomains.yMax - (targetRelativeYNormalized * targetYRange); // Invert Y back
+    // Translate back
+    const finalTargetLocalX = unrotatedTargetX + targetWidth / 2;
+    const finalTargetLocalY = unrotatedTargetY + targetHeight / 2;
+    
+    // STEP 7: Convert to relative position within target graph's content area (0-1)
+    const targetRelativeXNormalized = (finalTargetLocalX - chartPadding) / targetInnerWidth;
+    const targetRelativeYNormalized = (finalTargetLocalY - chartPadding) / targetInnerHeight;
+    
+    // STEP 8: Convert to target domain coordinates
+    const newX = toDomains.xMin + (targetRelativeXNormalized * (toDomains.xMax - toDomains.xMin));
+    // Invert Y back
+    const newY = toDomains.yMax - (targetRelativeYNormalized * (toDomains.yMax - toDomains.yMin));
     
     // Create a new point with transformed coordinates
     return {
@@ -1071,15 +1113,102 @@ export default function DraggableGraph({
     detectOverlaps();
   }, [detectOverlaps, position, size, zIndex, allGraphs]);
   
+  // Add state for dropdown
+  const [isDumpDropdownOpen, setIsDumpDropdownOpen] = useState(false);
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
+  const [isDumping, setIsDumping] = useState(false);
+  const [dumpingTargetId, setDumpingTargetId] = useState<string | null>(null);
+  const dumpButtonRef = useRef<HTMLButtonElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  
+  // Handle dump button click
+  const handleDumpButtonClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    
+    // Calculate dropdown position based on button position
+    if (dumpButtonRef.current) {
+      const rect = dumpButtonRef.current.getBoundingClientRect();
+      setDropdownPosition({
+        top: rect.bottom + 5, // Position below the button with some margin
+        left: rect.left
+      });
+    }
+    
+    // Toggle dropdown
+    setIsDumpDropdownOpen(!isDumpDropdownOpen);
+  };
+  
+  // Track mouse events to handle dropdown closure properly
+  useEffect(() => {
+    // Skip if dropdown is not open
+    if (!isDumpDropdownOpen) return;
+    
+    // This tracks if we've started a click inside the dropdown or button
+    let clickStartedInside = false;
+    
+    const handleMouseDown = (e: MouseEvent) => {
+      // Check if click started inside dropdown or button
+      clickStartedInside = 
+        (dropdownRef.current?.contains(e.target as Node) || 
+         dumpButtonRef.current?.contains(e.target as Node)) || false;
+    };
+    
+    const handleMouseUp = (e: MouseEvent) => {
+      // Only close if both mousedown and mouseup occurred outside
+      if (!clickStartedInside && 
+          !dropdownRef.current?.contains(e.target as Node) && 
+          !dumpButtonRef.current?.contains(e.target as Node)) {
+        setIsDumpDropdownOpen(false);
+      }
+      // Reset tracker
+      clickStartedInside = false;
+    };
+    
+    // Use capture phase to ensure we get events before other handlers
+    document.addEventListener('mousedown', handleMouseDown, true);
+    document.addEventListener('mouseup', handleMouseUp, true);
+    
+    return () => {
+      document.removeEventListener('mousedown', handleMouseDown, true);
+      document.removeEventListener('mouseup', handleMouseUp, true);
+    };
+  }, [isDumpDropdownOpen]);
+
   // Add function to handle dumping points to a lower graph
   const handleDumpPoints = (toGraphId: string) => {
+    // Set dumping state to show loading indicator
+    setIsDumping(true);
+    setDumpingTargetId(toGraphId);
+    
+    // Debugging logs
+    console.log(`handleDumpPoints called with toGraphId: ${toGraphId}`);
+    console.log('Current allGraphs:', allGraphs);
+    
     // Find the target graph
     const targetGraph = allGraphs.find(graph => graph.id === toGraphId);
-    if (!targetGraph || !onDumpPoints) return;
+    if (!targetGraph || !onDumpPoints) {
+      console.error("Target graph not found or onDumpPoints not provided:", { 
+        targetGraphFound: !!targetGraph, 
+        onDumpPointsProvided: !!onDumpPoints 
+      });
+      setIsDumping(false);
+      setDumpingTargetId(null);
+      return;
+    }
     
     // Find the current graph (source)
     const sourceGraph = allGraphs.find(graph => graph.id === id);
-    if (!sourceGraph) return;
+    if (!sourceGraph) {
+      console.error("Source graph not found:", { id });
+      setIsDumping(false);
+      setDumpingTargetId(null);
+      return;
+    }
+    
+    console.log("Source graph:", sourceGraph);
+    console.log("Target graph:", targetGraph);
+    console.log("ProcessedData length:", processedData.length);
     
     // Ensure valid domains for both graphs
     const sourceDomains = {
@@ -1096,7 +1225,7 @@ export default function DraggableGraph({
       yMax: targetGraph.domains?.yMax ?? 5000
     };
     
-    // Transform points with the graph positioning information
+    // Transform points with graph positioning and rotation information
     const transformedPoints = transformPoints(
       processedData,
       sourceDomains,
@@ -1104,16 +1233,29 @@ export default function DraggableGraph({
       {
         position: sourceGraph.position,
         size: sourceGraph.size,
-        color: sourceGraph.color
+        color: sourceGraph.color,
+        rotation: sourceGraph.rotation || 0
       },
       {
         position: targetGraph.position,
-        size: targetGraph.size
+        size: targetGraph.size,
+        rotation: targetGraph.rotation || 0
       }
     );
     
+    console.log(`Transformed ${transformedPoints.length} points`);
+    
     // Call the handler with transformed points
-    onDumpPoints(id, toGraphId, transformedPoints);
+    try {
+      onDumpPoints(id, toGraphId, transformedPoints);
+      console.log("onDumpPoints called successfully");
+    } catch (error) {
+      console.error("Error in onDumpPoints:", error);
+    } finally {
+      // Reset dumping state
+      setIsDumping(false);
+      setDumpingTargetId(null);
+    }
   };
 
   // Filter the processedData to separate dumped and original points
@@ -1212,35 +1354,20 @@ export default function DraggableGraph({
                 {filename || 'Data Graph'} {!isMinimized && `(${localRotation.toFixed(1)}°)`}
               </h3>
               
-              {/* Show dump buttons when there are overlapping graphs */}
+              {/* Show dump button when there are overlapping graphs */}
               {!isMinimized && overlappingGraphs.length > 0 && (
                 <div className="ml-2 flex space-x-1">
-                  <div className="relative group">
-                    <button
-                      className="px-1.5 py-0.5 bg-purple-500 text-white text-xs rounded hover:bg-purple-600 transition-colors"
-                      title="Dump points to overlapping graph"
-                    >
-                      Dump ↓
-                    </button>
-                    <div className="absolute left-0 top-full mt-1 z-50 bg-white shadow-lg rounded border border-gray-200 py-1 hidden group-hover:block min-w-[120px]">
-                      {overlappingGraphs.map(graph => (
-                        <button
-                          key={graph.id}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDumpPoints(graph.id);
-                          }}
-                          className="w-full text-left px-3 py-1.5 hover:bg-gray-100 text-xs flex items-center"
-                        >
-                          <div 
-                            className="w-2 h-2 rounded-full mr-2" 
-                            style={{ backgroundColor: graph.color }}
-                          ></div>
-                          <span className="truncate">{graph.title || 'Graph'}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+                  <button
+                    ref={dumpButtonRef}
+                    className="px-2 py-1 bg-purple-500 text-white text-xs rounded hover:bg-purple-600 transition-colors flex items-center"
+                    title="Dump points to overlapping graph"
+                    onClick={handleDumpButtonClick}
+                  >
+                    <span>Dump</span>
+                    <svg className="w-3 h-3 ml-1 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
                 </div>
               )}
             </div>
@@ -1686,6 +1813,61 @@ export default function DraggableGraph({
           >
             Global coordinates: ({Math.round(currentCoordinates.x)}, {Math.round(currentCoordinates.y)})
           </div>
+        )}
+
+        {/* Render dropdown menu using React Portal for better stacking context */}
+        {isDumpDropdownOpen && overlappingGraphs.length > 0 && createPortal(
+          <div 
+            ref={dropdownRef}
+            className="fixed z-[9999] bg-white shadow-xl rounded border border-gray-200 py-1 min-w-[140px]"
+            style={{
+              top: `${dropdownPosition.top}px`,
+              left: `${dropdownPosition.left}px`,
+            }}
+            onClick={(e) => {
+              // Prevent clicks inside the dropdown from closing it accidentally
+              e.stopPropagation();
+            }}
+          >
+            <div className="py-1 border-b border-gray-200">
+              <div className="px-3 py-1 text-xs font-semibold text-gray-500">
+                Select target graph
+              </div>
+            </div>
+            {overlappingGraphs.map(graph => (
+              <div 
+                key={graph.id}
+                className="px-3 py-2 hover:bg-gray-100 text-sm cursor-pointer flex items-center"
+                onClick={(e) => {
+                  // Manually handle the click without relying on button behavior
+                  e.preventDefault();
+                  e.stopPropagation();
+                  try {
+                    console.log(`Manually triggering dump for graph ${graph.id}`);
+                    handleDumpPoints(graph.id);
+                    // Close dropdown after selection is processed
+                    setIsDumpDropdownOpen(false);
+                  } catch (error) {
+                    console.error("Error during dump click handling:", error);
+                  }
+                }}
+              >
+                <div 
+                  className="w-3 h-3 rounded-full mr-2" 
+                  style={{ backgroundColor: graph.color }}
+                />
+                <span className="truncate">{graph.title || graph.filename || 'Graph'}</span>
+                {isDumping && graph.id === dumpingTargetId && (
+                  <div className="ml-2 animate-pulse">
+                    <svg className="w-3 h-3 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>,
+          document.body
         )}
       </div>
     </ErrorBoundary>

@@ -371,17 +371,36 @@ export default function Home() {
 
   // Handler for dumping points from one graph to another
   const handleDumpPoints = (fromGraphId: string, toGraphId: string, transformedPoints: any[]) => {
+    console.log(`handleDumpPoints in page.tsx called with:`, {
+      fromGraphId,
+      toGraphId,
+      pointsCount: transformedPoints.length
+    });
+    
     // Find the source and target graphs
     const sourceGraph = graphs.find(g => g.id === fromGraphId);
     const targetGraph = graphs.find(g => g.id === toGraphId);
     
     if (!sourceGraph || !targetGraph) {
-      console.error("Source or target graph not found");
+      console.error("Source or target graph not found:", {
+        sourceGraphFound: !!sourceGraph,
+        targetGraphFound: !!targetGraph,
+        fromGraphId,
+        toGraphId,
+        availableGraphIds: graphs.map(g => g.id)
+      });
       return;
     }
     
+    console.log("Found source and target graphs:", {
+      sourceTitle: sourceGraph.title,
+      targetTitle: targetGraph.title
+    });
+    
     // Create a dialog to confirm the operation
     if (window.confirm(`Dump ${transformedPoints.length} points from "${sourceGraph.title}" to "${targetGraph.title}"?`)) {
+      console.log("User confirmed point dumping");
+      
       // Update the target graph with the new points
       setGraphs(prevGraphs => 
         prevGraphs.map(graph => {
@@ -398,6 +417,8 @@ export default function Home() {
               _isDumped: true
             }));
             
+            console.log(`Adding ${pointsWithMetadata.length} points to target graph`);
+            
             // Combine existing points with new points
             return {
               ...graph,
@@ -410,6 +431,8 @@ export default function Home() {
       
       // Show success message
       alert(`Successfully dumped ${transformedPoints.length} points to "${targetGraph.title}"`);
+    } else {
+      console.log("User cancelled point dumping");
     }
   };
 
