@@ -3,10 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint"
+    "dev": "node scripts/clear-logs.js && next dev",
+    "build": "node scripts/clear-logs.js && next build",
+    "start": "node scripts/clear-logs.js && next start",
+    "lint": "next lint",
+    "clear-logs": "node scripts/clear-logs.js"
   },
   "dependencies": {
     "next": "14.0.4",

@@ -64,28 +64,144 @@ const doRectanglesOverlap = (
   );
 };
 
+// Function to write debug data to a JSON file on the server
+const writeDebugDataToFile = async (data: any) => {
+  try {
+    // Send the debug data to our API endpoint
+    const response = await fetch('/api/log', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    });
+    
+    // Parse the response
+    const result = await response.json();
+    
+    if (result.success) {
+      console.log(`Debug data saved to server: ${result.filename}`);
+    } else {
+      console.error('Error saving debug data to server:', result.error);
+    }
+  } catch (error) {
+    console.error('Error sending debug data to server:', error);
+  }
+};
+
+// Function to help measure actual chart rendering area
+const measureChartArea = (graphElement: HTMLElement | null): { 
+  chartLeft: number; 
+  chartTop: number; 
+  chartWidth: number; 
+  chartHeight: number; 
+} => {
+  const defaultMeasurements = {
+    chartLeft: 59, // Default based on left margin + border + padding
+    chartTop: 61,  // Default based on header + top margin + border + padding
+    chartWidth: 0,
+    chartHeight: 0
+  };
+  
+  if (!graphElement) return defaultMeasurements;
+  
+  try {
+    // Try to find the actual SVG element 
+    const svgElement = graphElement.querySelector('.recharts-wrapper svg');
+    if (!svgElement) return defaultMeasurements;
+    
+    // Find the chart area (the g element that contains the actual plotted data)
+    const chartAreaElement = svgElement.querySelector('.recharts-scatter');
+    if (!chartAreaElement) return defaultMeasurements;
+    
+    // Get the bounding rect to determine the actual chart area position and size
+    const chartRect = chartAreaElement.getBoundingClientRect();
+    const containerRect = graphElement.getBoundingClientRect();
+    
+    // Calculate the relative position within the container
+    return {
+      chartLeft: chartRect.left - containerRect.left,
+      chartTop: chartRect.top - containerRect.top,
+      chartWidth: chartRect.width,
+      chartHeight: chartRect.height
+    };
+  } catch (error) {
+    console.error("Error measuring chart area:", error);
+    return defaultMeasurements;
+  }
+};
+
 // Helper function to transform points between coordinate systems
 const transformPoints = (
   points: any[],
   fromDomains: { xMin: number; xMax: number; yMin: number; yMax: number },
   toDomains: { xMin: number; xMax: number; yMin: number; yMax: number },
-  sourceGraph: { position: { x: number; y: number }, size: { width: number; height: number }, color: string, rotation: number },
-  targetGraph: { position: { x: number; y: number }, size: { width: number; height: number }, rotation: number }
+  sourceGraph: { position: { x: number; y: number }, size: { width: number; height: number }, color: string, rotation: number, element?: HTMLElement | null },
+  targetGraph: { position: { x: number; y: number }, size: { width: number; height: number }, rotation: number, element?: HTMLElement | null }
 ): any[] => {
-  // Define chart padding (assuming 20px on all sides)
-  const chartPadding = 20;
+  // Collect debug data that will be written to the file
+  const debugData: any = {
+    timestamp: new Date().toISOString(),
+    graphs: {
+      source: {
+        position: sourceGraph.position,
+        size: sourceGraph.size,
+        color: sourceGraph.color,
+        rotation: sourceGraph.rotation,
+        domains: fromDomains
+      },
+      target: {
+        position: targetGraph.position,
+        size: targetGraph.size,
+        rotation: targetGraph.rotation,
+        domains: toDomains
+      }
+    },
+    points: {
+      count: points.length,
+      samplePoints: points.slice(0, 5).map(p => ({ x: p.x, y: p.y }))
+    }
+  };
   
-  // Source graph dimensions
+  // Use actual measurements if available, otherwise use calculated values
+  const sourceMeasurements = sourceGraph.element ? measureChartArea(sourceGraph.element) : null;
+  const targetMeasurements = targetGraph.element ? measureChartArea(targetGraph.element) : null;
+  
+  // Define chart padding for each side to match actual rendered chart
+  // These values should match the ScatterChart margin values exactly
+  const chartMargin = {
+    top: 20,
+    right: 20,
+    bottom: 30,
+    left: 50
+  };
+  
+  // Container additional offsets (p-2 class = 0.5rem padding which is typically 8px)
+  const containerPadding = 8;  
+  const borderWidth = 1;
+  
+  // Account for header height (32px) and add container padding + border
+  const headerHeight = 32;
+  const totalTopOffset = sourceMeasurements ? sourceMeasurements.chartTop : (headerHeight + containerPadding + borderWidth + chartMargin.top);
+  
+  // All other sides just have container padding + border + chart margin
+  const totalLeftOffset = sourceMeasurements ? sourceMeasurements.chartLeft : (containerPadding + borderWidth + chartMargin.left);
+  
+  // Target offsets
+  const targetTopOffset = targetMeasurements ? targetMeasurements.chartTop : totalTopOffset;
+  const targetLeftOffset = targetMeasurements ? targetMeasurements.chartLeft : totalLeftOffset;
+  
+  // Source graph dimensions (accounting for all offsets)
   const sourceWidth = sourceGraph.size.width;
   const sourceHeight = sourceGraph.size.height;
-  const sourceInnerWidth = sourceWidth - (chartPadding * 2);
-  const sourceInnerHeight = sourceHeight - (chartPadding * 2);
+  const sourceInnerWidth = sourceMeasurements ? sourceMeasurements.chartWidth : (sourceWidth - (totalLeftOffset + chartMargin.right + containerPadding + borderWidth));
+  const sourceInnerHeight = sourceMeasurements ? sourceMeasurements.chartHeight : (sourceHeight - (totalTopOffset + chartMargin.bottom + containerPadding + borderWidth));
   
-  // Target graph dimensions
+  // Target graph dimensions (accounting for all offsets)
   const targetWidth = targetGraph.size.width;
   const targetHeight = targetGraph.size.height;
-  const targetInnerWidth = targetWidth - (chartPadding * 2);
-  const targetInnerHeight = targetHeight - (chartPadding * 2);
+  const targetInnerWidth = targetMeasurements ? targetMeasurements.chartWidth : (targetWidth - (targetLeftOffset + chartMargin.right + containerPadding + borderWidth));
+  const targetInnerHeight = targetMeasurements ? targetMeasurements.chartHeight : (targetHeight - (targetTopOffset + chartMargin.bottom + containerPadding + borderWidth));
   
   // Calculate the center points of each graph (for rotation)
   const sourceCenterX = sourceGraph.position.x + sourceWidth / 2;
@@ -97,14 +213,60 @@ const transformPoints = (
   const sourceRotationRad = (sourceGraph.rotation || 0) * Math.PI / 180;
   const targetRotationRad = (targetGraph.rotation || 0) * Math.PI / 180;
   
-  return points.map(point => {
+  // Add calculated values to debug data
+  debugData.calculations = {
+    offsets: {
+      source: {
+        top: totalTopOffset,
+        left: totalLeftOffset
+      },
+      target: {
+        top: targetTopOffset,
+        left: targetLeftOffset
+      }
+    },
+    dimensions: {
+      source: {
+        width: sourceWidth,
+        height: sourceHeight,
+        innerWidth: sourceInnerWidth,
+        innerHeight: sourceInnerHeight,
+        centerX: sourceCenterX,
+        centerY: sourceCenterY
+      },
+      target: {
+        width: targetWidth,
+        height: targetHeight,
+        innerWidth: targetInnerWidth,
+        innerHeight: targetInnerHeight,
+        centerX: targetCenterX,
+        centerY: targetCenterY
+      }
+    },
+    measurements: {
+      source: sourceMeasurements,
+      target: targetMeasurements
+    },
+    constants: {
+      headerHeight,
+      containerPadding,
+      borderWidth,
+      chartMargin
+    }
+  };
+  
+  // Store the transformation steps for a sample point
+  debugData.transformationSteps = [];
+  
+  // Process the points
+  const transformedPoints = points.map((point, index) => {
     // STEP 1: Calculate the relative position (0-1) within the source graph's domain
     const relativeX = (point.x - fromDomains.xMin) / (fromDomains.xMax - fromDomains.xMin);
     const relativeY = 1 - ((point.y - fromDomains.yMin) / (fromDomains.yMax - fromDomains.yMin)); // Invert Y for screen coords
     
     // STEP 2: Convert to pixel position within source graph content area (relative to graph's top-left)
-    const sourceLocalX = chartPadding + (relativeX * sourceInnerWidth);
-    const sourceLocalY = chartPadding + (relativeY * sourceInnerHeight);
+    const sourceLocalX = totalLeftOffset + (relativeX * sourceInnerWidth);
+    const sourceLocalY = totalTopOffset + (relativeY * sourceInnerHeight);
     
     // STEP 3: Apply source graph's rotation (if any)
     // First translate to origin (center of graph)
@@ -153,25 +315,63 @@ const transformPoints = (
     const finalTargetLocalY = unrotatedTargetY + targetHeight / 2;
     
     // STEP 7: Convert to relative position within target graph's content area (0-1)
-    const targetRelativeXNormalized = (finalTargetLocalX - chartPadding) / targetInnerWidth;
-    const targetRelativeYNormalized = (finalTargetLocalY - chartPadding) / targetInnerHeight;
+    const targetRelativeXNormalized = (finalTargetLocalX - targetLeftOffset) / targetInnerWidth;
+    const targetRelativeYNormalized = (finalTargetLocalY - targetTopOffset) / targetInnerHeight;
     
     // STEP 8: Convert to target domain coordinates
     const newX = toDomains.xMin + (targetRelativeXNormalized * (toDomains.xMax - toDomains.xMin));
     // Invert Y back
     const newY = toDomains.yMax - (targetRelativeYNormalized * (toDomains.yMax - toDomains.yMin));
     
+    // Clamp values to the target domain to prevent points from falling outside the valid range
+    const clampedX = Math.max(toDomains.xMin, Math.min(toDomains.xMax, newX));
+    const clampedY = Math.max(toDomains.yMin, Math.min(toDomains.yMax, newY));
+    
+    // Store transformation details for the first 5 points for debugging
+    if (index < 5) {
+      debugData.transformationSteps.push({
+        pointIndex: index,
+        originalPoint: { x: point.x, y: point.y },
+        step1_RelativePosition: { x: relativeX, y: relativeY },
+        step2_SourceLocalPosition: { x: sourceLocalX, y: sourceLocalY },
+        step3_SourceOffsetFromCenter: { x: sourceOffsetX, y: sourceOffsetY },
+        step3_AfterRotation: { x: rotatedSourceX, y: rotatedSourceY },
+        step3_FinalSourceLocal: { x: finalSourceLocalX, y: finalSourceLocalY },
+        step4_AbsoluteScreenPosition: { x: absoluteX, y: absoluteY },
+        step5_TargetRelativePosition: { x: targetRelativeX, y: targetRelativeY },
+        step6_TargetOffsetFromCenter: { x: targetOffsetX, y: targetOffsetY },
+        step6_AfterInverseRotation: { x: unrotatedTargetX, y: unrotatedTargetY },
+        step6_FinalTargetLocal: { x: finalTargetLocalX, y: finalTargetLocalY },
+        step7_TargetNormalizedPosition: { x: targetRelativeXNormalized, y: targetRelativeYNormalized },
+        step8_ResultInTargetDomain: { x: newX, y: newY },
+        finalClampedResult: { x: clampedX, y: clampedY }
+      });
+    }
+    
     // Create a new point with transformed coordinates
     return {
       ...point,
-      x: newX,
-      y: newY,
+      x: clampedX,
+      y: clampedY,
       _originalX: point.x,
       _originalY: point.y,
       _originalColor: sourceGraph.color, // Store the original color
       color: sourceGraph.color // Preserve the original color
     };
   });
+
+  // Write the debug data to a file
+  writeDebugDataToFile(debugData);
+  
+  // Also log summary to console
+  console.log('Transform debug info:', {
+    sourceSize: debugData.calculations.dimensions.source,
+    targetSize: debugData.calculations.dimensions.target,
+    offsets: debugData.calculations.offsets,
+    pointsTransformed: points.length
+  });
+  
+  return transformedPoints;
 };
 
 export default function DraggableGraph({ 
@@ -1234,12 +1434,14 @@ export default function DraggableGraph({
         position: sourceGraph.position,
         size: sourceGraph.size,
         color: sourceGraph.color,
-        rotation: sourceGraph.rotation || 0
+        rotation: sourceGraph.rotation || 0,
+        element: containerRef.current
       },
       {
         position: targetGraph.position,
         size: targetGraph.size,
-        rotation: targetGraph.rotation || 0
+        rotation: targetGraph.rotation || 0,
+        element: containerRef.current
       }
     );
     
@@ -1492,7 +1694,7 @@ export default function DraggableGraph({
                   }}
                 >
                   <ScatterChart 
-                    margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
+                    margin={{ top: 20, right: 20, bottom: 30, left: 50 }}
                     style={{ background: "transparent" }}
                   >
                     {/* Simplified CartesianGrid approach to eliminate rendering issues */}
