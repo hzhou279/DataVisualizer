@@ -164,16 +164,18 @@ const transformPoints = (
   };
   
   // Use actual measurements if available, otherwise use calculated values
-  const sourceMeasurements = sourceGraph.element ? measureChartArea(sourceGraph.element) : null;
-  const targetMeasurements = targetGraph.element ? measureChartArea(targetGraph.element) : null;
+  // const sourceMeasurements = sourceGraph.element ? measureChartArea(sourceGraph.element) : null;
+  // const targetMeasurements = targetGraph.element ? measureChartArea(targetGraph.element) : null;
+  const sourceMeasurements = null;
+  const targetMeasurements = null;
   
   // Define chart padding for each side to match actual rendered chart
   // These values should match the ScatterChart margin values exactly
   const chartMargin = {
-    top: 20,
-    right: 20,
-    bottom: 30,
-    left: 50
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0
   };
   
   // Container additional offsets (p-2 class = 0.5rem padding which is typically 8px)
@@ -182,26 +184,39 @@ const transformPoints = (
   
   // Account for header height (32px) and add container padding + border
   const headerHeight = 32;
-  const totalTopOffset = sourceMeasurements ? sourceMeasurements.chartTop : (headerHeight + containerPadding + borderWidth + chartMargin.top);
+  // const totalTopOffset = sourceMeasurements ? sourceMeasurements.chartTop : (headerHeight + containerPadding + borderWidth + chartMargin.top);
   
-  // All other sides just have container padding + border + chart margin
-  const totalLeftOffset = sourceMeasurements ? sourceMeasurements.chartLeft : (containerPadding + borderWidth + chartMargin.left);
+  // // All other sides just have container padding + border + chart margin
+  // const totalLeftOffset = sourceMeasurements ? sourceMeasurements.chartLeft : (containerPadding + borderWidth + chartMargin.left);
   
-  // Target offsets
-  const targetTopOffset = targetMeasurements ? targetMeasurements.chartTop : totalTopOffset;
-  const targetLeftOffset = targetMeasurements ? targetMeasurements.chartLeft : totalLeftOffset;
+  // // Target offsets
+  // const targetTopOffset = targetMeasurements ? targetMeasurements.chartTop : totalTopOffset;
+  // const targetLeftOffset = targetMeasurements ? targetMeasurements.chartLeft : totalLeftOffset;
   
-  // Source graph dimensions (accounting for all offsets)
+  // // Source graph dimensions (accounting for all offsets)
+  // const sourceWidth = sourceGraph.size.width;
+  // const sourceHeight = sourceGraph.size.height;
+  // const sourceInnerWidth = sourceMeasurements ? sourceMeasurements.chartWidth : (sourceWidth - (totalLeftOffset + chartMargin.right + containerPadding + borderWidth));
+  // const sourceInnerHeight = sourceMeasurements ? sourceMeasurements.chartHeight : (sourceHeight - (totalTopOffset + chartMargin.bottom + containerPadding + borderWidth));
+  
+  // // Target graph dimensions (accounting for all offsets)
+  // const targetWidth = targetGraph.size.width;
+  // const targetHeight = targetGraph.size.height;
+  // const targetInnerWidth = targetMeasurements ? targetMeasurements.chartWidth : (targetWidth - (targetLeftOffset + chartMargin.right + containerPadding + borderWidth));
+  // const targetInnerHeight = targetMeasurements ? targetMeasurements.chartHeight : (targetHeight - (targetTopOffset + chartMargin.bottom + containerPadding + borderWidth));
+
+  const totalTopOffset = (headerHeight + containerPadding + borderWidth + chartMargin.top);
+  const totalLeftOffset = (containerPadding + borderWidth + chartMargin.left);
+  const targetTopOffset = totalTopOffset;
+  const targetLeftOffset = totalLeftOffset;
   const sourceWidth = sourceGraph.size.width;
   const sourceHeight = sourceGraph.size.height;
-  const sourceInnerWidth = sourceMeasurements ? sourceMeasurements.chartWidth : (sourceWidth - (totalLeftOffset + chartMargin.right + containerPadding + borderWidth));
-  const sourceInnerHeight = sourceMeasurements ? sourceMeasurements.chartHeight : (sourceHeight - (totalTopOffset + chartMargin.bottom + containerPadding + borderWidth));
-  
-  // Target graph dimensions (accounting for all offsets)
+  const sourceInnerWidth = sourceWidth - (totalLeftOffset + chartMargin.right + containerPadding + borderWidth);
+  const sourceInnerHeight = sourceHeight - (totalTopOffset + chartMargin.bottom + containerPadding + borderWidth);
   const targetWidth = targetGraph.size.width;
   const targetHeight = targetGraph.size.height;
-  const targetInnerWidth = targetMeasurements ? targetMeasurements.chartWidth : (targetWidth - (targetLeftOffset + chartMargin.right + containerPadding + borderWidth));
-  const targetInnerHeight = targetMeasurements ? targetMeasurements.chartHeight : (targetHeight - (targetTopOffset + chartMargin.bottom + containerPadding + borderWidth));
+  const targetInnerWidth = targetWidth - (targetLeftOffset + chartMargin.right + containerPadding + borderWidth);
+  const targetInnerHeight = targetHeight - (targetTopOffset + chartMargin.bottom + containerPadding + borderWidth);
   
   // Calculate the center points of each graph (for rotation)
   const sourceCenterX = sourceGraph.position.x + sourceWidth / 2;
@@ -1694,7 +1709,7 @@ export default function DraggableGraph({
                   }}
                 >
                   <ScatterChart 
-                    margin={{ top: 20, right: 20, bottom: 30, left: 50 }}
+                    margin={{ top: 0, right: 0, bottom: 0, left: 0 }}
                     style={{ background: "transparent" }}
                   >
                     {/* Simplified CartesianGrid approach to eliminate rendering issues */}
@@ -1704,6 +1719,7 @@ export default function DraggableGraph({
                       strokeWidth={data && data.length > 1000 ? 0.5 : 1}
                     />
                     <XAxis 
+                      hide={true}
                       type="number" 
                       dataKey="x" 
                       xAxisId={0}
@@ -1759,6 +1775,7 @@ export default function DraggableGraph({
                       }}
                     />
                     <YAxis 
+                      hide={true}
                       type="number"
                       dataKey="y"
                       yAxisId={0}
