@@ -183,7 +183,7 @@ const transformPoints = (
   const borderWidth = 1;
   
   // Account for header height (32px) and add container padding + border
-  const headerHeight = 32;
+  const headerHeight = 50;
   // const totalTopOffset = sourceMeasurements ? sourceMeasurements.chartTop : (headerHeight + containerPadding + borderWidth + chartMargin.top);
   
   // // All other sides just have container padding + border + chart margin
@@ -223,6 +223,10 @@ const transformPoints = (
   const sourceCenterY = sourceGraph.position.y + sourceHeight / 2;
   const targetCenterX = targetGraph.position.x + targetWidth / 2;
   const targetCenterY = targetGraph.position.y + targetHeight / 2;
+  // const sourceCenterX = sourceWidth / 2;
+  // const sourceCenterY = sourceHeight / 2;
+  // const targetCenterX = targetWidth / 2;
+  // const targetCenterY = targetHeight / 2;
   
   // Convert rotation from degrees to radians
   const sourceRotationRad = (sourceGraph.rotation || 0) * Math.PI / 180;
@@ -1543,6 +1547,7 @@ export default function DraggableGraph({
           {/* Header with semi-transparent background */}
           <div 
             className={`handle bg-white bg-opacity-80 p-2 border-b border-gray-200 flex justify-between items-center cursor-move ${isMinimized ? 'rounded-lg' : ''}`}
+            style={{ height: '50px' }} // Explicitly set height here
             onMouseDown={(e) => handleDrag(e, 'move')}
             onDoubleClick={() => {
               if (isMinimized) {
@@ -1690,7 +1695,7 @@ export default function DraggableGraph({
               className="flex-1 p-2 relative flex flex-col" 
               style={{ 
                 minHeight: 0, 
-                height: "calc(100% - 32px)",  // Subtract header height to ensure proper sizing
+                height: "calc(100% - 50px)",  // Subtract header height to ensure proper sizing
                 backgroundColor: "transparent" // Completely transparent background
               }}
             >

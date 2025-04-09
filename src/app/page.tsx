@@ -108,7 +108,7 @@ export default function Home() {
       
       // Use fixed reasonable sizes
       const initialWidth = 600;
-      const initialHeight = 632;
+      const initialHeight = 650;
       
       // Get current color and increment color index
       const currentColor = graphColors[colorIndex];
